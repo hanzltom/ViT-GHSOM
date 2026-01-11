@@ -3,21 +3,22 @@ import numpy as np
 """
 Distance functions
 """
-def euclidean_distance(a, b):
-    diff = np.abs(a - b)
-    return np.linalg.norm(diff, axis=2)
 
-def manhattan_distance(a, b):
+def euclidean_distance(a, b, axis):
     diff = np.abs(a - b)
-    return np.sum(diff, axis=2)
+    return np.linalg.norm(diff, axis=axis)
 
-def chebyshev_distance(a, b):
+def manhattan_distance(a, b, axis):
     diff = np.abs(a - b)
-    return np.max(diff, axis=2)
+    return np.sum(diff, axis=axis)
 
-def generic_distance(a, b, k):
+def chebyshev_distance(a, b, axis):
     diff = np.abs(a - b)
-    return np.power(np.sum(np.power(diff, k), axis=2), 1.0 / k)
+    return np.max(diff, axis=axis)
+
+def generic_distance(a, b, axis, k):
+    diff = np.abs(a - b)
+    return np.power(np.sum(np.power(diff, k), axis=axis), 1.0 / k)
 
 
 """
