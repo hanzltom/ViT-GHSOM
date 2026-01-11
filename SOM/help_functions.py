@@ -38,3 +38,15 @@ def cosine_down_to_zero_neighbourhood(grid_dists, sigma_t):
 
     influence[mask] = (np.cos((np.pi * grid_dists[mask]) / (2 * sigma_t)) + 1) / 2.0
     return influence
+
+
+"""
+Decay function
+"""
+
+def decay_exponential(initial_value, beta, t):
+    return initial_value * (beta ** t)
+
+
+def decay_power(initial_value, beta, t):
+    return initial_value * (t ** beta)
