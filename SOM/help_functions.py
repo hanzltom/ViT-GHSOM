@@ -187,6 +187,8 @@ def visualize_u_matrix(matrix, epoch_num):
     plt.tight_layout()
     plt.show()
 
+
+
 def generate_u_matrix_vid(db):
     epochs = sorted(db.keys())
 
@@ -197,6 +199,129 @@ def generate_u_matrix_vid(db):
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label('Average Distance to Neighbours')
 
+    plt.tight_layout()
+
+    def update(frame_idx):
+        epoch = epochs[frame_idx]
+        map = db[epoch]
+
+        im.set_data(map)
+        ax.set_title(f"Epoch: {epoch}")
+        return [im]
+
+    anim = animation.FuncAnimation(
+        fig,
+        update,
+        frames=len(epochs),
+        interval=200,
+        blit=True
+    )
+
+    plt.close()
+    return HTML(anim.to_jshtml())
+
+
+def generate_extended_u_matrix(weight_matrix):
+    m, n, dim = weight_matrix.shape
+
+    # Size of extended U-Matrix (2m-1)*(2n-1)
+    ext_m = 2 * m - 1
+    ext_n = 2 * n - 1
+    u_matrix_extended = np.zeros((ext_m, ext_n))
+
+    # Horizontal distances
+    for r in range(m):
+        for c in range(n - 1):
+            current_node = weight_matrix[r, c]
+            right_neighbour = weight_matrix[r, c + 1]
+
+            dist = np.linalg.norm(current_node - right_neighbour)
+            u_matrix_extended[2 * r, 2 * c + 1] = dist
+
+    # Vertical distances
+    for r in range(m - 1):
+        for c in range(n):
+            current_node = weight_matrix[r, c]
+            bottom_neighbour = weight_matrix[r + 1, c]
+
+            dist = np.linalg.norm(current_node - bottom_neighbour)
+            u_matrix_extended[2 * r + 1, 2 * c] = dist
+
+    # Centers among distances - odd rows, odd columns - average over neighbours
+    for r in range(1, ext_m, 2):
+        for c in range(1, ext_n, 2):
+            neighbours = [u_matrix_extended[r - 1, c], u_matrix_extended[r + 1, c], u_matrix_extended[r, c - 1],
+                         u_matrix_extended[r, c + 1]]
+            u_matrix_extended[r, c] = np.mean(neighbours)
+
+    # Neuron positions - average over neighbours
+    for r in range(0, ext_m, 2):
+        for c in range(0, ext_n, 2):
+            distances = []
+            if r > 0: distances.append(u_matrix_extended[r - 1, c]) #top
+            if r < ext_m - 1: distances.append(u_matrix_extended[r + 1, c]) #bottom
+            if c > 0: distances.append(u_matrix_extended[r, c - 1]) #left
+            if c < ext_n - 1: distances.append(u_matrix_extended[r, c + 1]) #right
+
+            u_matrix_extended[r,c] = np.mean(distances)
+
+
+    return u_matrix_extended
+
+def generate_u_matrix_extended_db(model):
+    u_matrix_extended_db = {}
+    for epoch, weight_matrix in model.weights_db.items():
+        u_matrix_extended_db[epoch] = generate_extended_u_matrix(weight_matrix)
+
+    return u_matrix_extended_db
+
+def visualize_u_matrix_extended(matrix, epoch_num):
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    im = ax.imshow(matrix, cmap='plasma')
+
+    m, n = matrix.shape
+
+    neuron_x_coords = []
+    neuron_y_coords = []
+
+    for r in range(0, m, 2):
+        for c in range(0, n, 2):
+            neuron_y_coords.append(r)
+            neuron_x_coords.append(c)
+
+    ax.scatter(neuron_x_coords, neuron_y_coords, s=30, c='yellow', edgecolors='black', label='Neuron Position')
+
+    ax.set_title(f"U-Matrix Extended (Epoch: {epoch_num})")
+    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label('Distance')
+    ax.legend(loc='upper left', bbox_to_anchor=(1.1, 1.0))
+
+    plt.tight_layout()
+    plt.show()
+
+def generate_u_matrix_extended_vid(db):
+    epochs = sorted(db.keys())
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    values = [db[e] for e in epochs]
+
+    im = ax.imshow(db[0], cmap='plasma', vmin=np.min(values), vmax=np.max(values))
+    m, n = values[0].shape
+
+    neuron_x_coords = []
+    neuron_y_coords = []
+
+    for r in range(0, m, 2):
+        for c in range(0, n, 2):
+            neuron_y_coords.append(r)
+            neuron_x_coords.append(c)
+
+    ax.scatter(neuron_x_coords, neuron_y_coords, s=30, c='yellow', edgecolors='black', label='Neuron Position')
+
+    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label('Distance')
+    ax.legend(loc='upper left', bbox_to_anchor=(1.1, 1.0))
     plt.tight_layout()
 
     def update(frame_idx):
