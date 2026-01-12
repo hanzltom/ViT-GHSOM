@@ -152,3 +152,33 @@ def visualize_u_matrix(matrix, epoch_num):
     plt.tight_layout()
     plt.show()
 
+def generate_u_matrix_vid(db):
+    epochs = sorted(db.keys())
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    values = [db[e] for e in epochs]
+
+    im = ax.imshow(db[0], cmap='plasma', vmin=np.min(values), vmax=np.max(values))
+    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label('Average Distance to Neighbours')
+
+    plt.tight_layout()
+
+    def update(frame_idx):
+        epoch = epochs[frame_idx]
+        map = db[epoch]
+
+        im.set_data(map)
+        ax.set_title(f"Epoch: {epoch}")
+        return [im]
+
+    anim = animation.FuncAnimation(
+        fig,
+        update,
+        frames=len(epochs),
+        interval=200,
+        blit=True
+    )
+
+    plt.close()
+    return HTML(anim.to_jshtml())
