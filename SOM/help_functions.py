@@ -1,4 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib import animation, colors
 
 """
 Distance functions
@@ -51,3 +54,23 @@ def decay_exponential(initial_value, beta, t):
 
 def decay_power(initial_value, beta, t):
     return initial_value * (t ** beta)
+
+
+"""
+Visualization
+"""
+
+
+def generate_colormap(map, y, epoch_num):
+    y_unique = np.unique(y)
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
+    cmap = colors.ListedColormap(color_options[:len(y_unique)])
+    cmap.set_bad(color='lightgrey')
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.imshow(map, cmap=cmap)
+    ax.set_title(f"Epoch: {epoch_num}")
+    patches = [mpatches.Patch(color=color_options[i], label=label) for i, label in enumerate(y_unique)]
+    patches.append(mpatches.Patch(color='lightgrey', label='Empty'))
+    ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.show()
