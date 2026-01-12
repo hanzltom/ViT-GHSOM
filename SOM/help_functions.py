@@ -148,17 +148,17 @@ def generate_label_matrix_vid(db, y):
 
 
 def generate_u_matrix(weight_matrix):
-    width, height, dim = weight_matrix.shape
-    u_matrix = np.zeros((width, height))
+    m, n, dim = weight_matrix.shape
+    u_matrix = np.zeros((m, n))
 
-    for x in range(width):
-        for y in range(height):
+    for r in range(m):
+        for c in range(n):
             distances = []
             current_neuron = weight_matrix[x, y]
-            coords_neighbours = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
-            for nx, ny in coords_neighbours:
-                if 0 <= nx < width and 0 <= ny < height:
-                    neighbor_neuron = weight_matrix[nx, ny]
+            coords_neighbours = [(m - 1, n), (m + 1, n), (m, n - 1), (m, n + 1)]
+            for nm, nn in coords_neighbours:
+                if 0 <= nn < n and 0 <= nm < m:
+                    neighbor_neuron = weight_matrix[nm, nn]
 
                     dist = np.linalg.norm(current_neuron - neighbor_neuron)
                     distances.append(dist)
