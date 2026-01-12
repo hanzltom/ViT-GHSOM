@@ -62,7 +62,7 @@ Visualization
 """
 
 
-def generate_colormap(map, y, epoch_num):
+def visualize_label_matrix(map, y, epoch_num):
     y_unique = np.unique(y)
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
     cmap = colors.ListedColormap(color_options[:len(y_unique)])
@@ -77,7 +77,7 @@ def generate_colormap(map, y, epoch_num):
     plt.show()
 
 
-def generate_vid(db, y):
+def generate_label_matrix_vid(db, y):
     epochs = sorted(db.keys())
     y_unique = np.unique(y)
 
@@ -110,3 +110,45 @@ def generate_vid(db, y):
 
     plt.close()
     return HTML(anim.to_jshtml())
+
+
+def generate_u_matrix(weight_matrix):
+    width, height, dim = weight_matrix.shape
+    u_matrix = np.zeros((width, height))
+
+    for x in range(width):
+        for y in range(height):
+            distances = []
+            current_neuron = weight_matrix[x, y]
+            coords_neighbours = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+            for nx, ny in coords_neighbours:
+                if 0 <= nx < width and 0 <= ny < height:
+                    neighbor_neuron = weight_matrix[nx, ny]
+
+                    dist = np.linalg.norm(current_neuron - neighbor_neuron)
+                    distances.append(dist)
+
+            u_matrix[x, y] = np.mean(distances)
+
+    return u_matrix
+
+
+def generate_u_matrix_db(model):
+    u_matrix_db = {}
+    for epoch, weight_matrix in model.weights_db.items():
+        u_matrix_db[epoch] = generate_u_matrix(weight_matrix)
+
+    return u_matrix_db
+
+
+def visualize_u_matrix(matrix, epoch_num):
+    ig, ax = plt.subplots(figsize=(8, 8))
+
+    im = ax.imshow(matrix, cmap='plasma')
+    ax.set_title(f"U-Matrix (Epoch: {epoch_num})")
+    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label('Average Distance to Neighbours')
+
+    plt.tight_layout()
+    plt.show()
+
