@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib import animation, colors
+from IPython.display import HTML
 
 """
 Distance functions
@@ -74,3 +75,38 @@ def generate_colormap(map, y, epoch_num):
     patches.append(mpatches.Patch(color='lightgrey', label='Empty'))
     ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.show()
+
+
+def generate_vid(db, y):
+    epochs = sorted(db.keys())
+    y_unique = np.unique(y)
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
+    cmap = colors.ListedColormap(color_options[:len(y_unique)])
+
+    im = ax.imshow(db[0], cmap=cmap)
+
+    patches = [mpatches.Patch(color=color_options[i], label=label) for i, label in enumerate(y_unique)]
+    patches.append(mpatches.Patch(color='lightgrey', label='Empty'))
+    ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+
+    def update(frame_idx):
+        epoch = epochs[frame_idx]
+        map = db[epoch]
+
+        im.set_data(map)
+        ax.set_title(f"Epoch: {epoch}")
+        return [im]
+
+    anim = animation.FuncAnimation(
+        fig,
+        update,
+        frames=len(epochs),
+        interval=200,
+        blit=True
+    )
+
+    plt.close()
+    return HTML(anim.to_jshtml())
