@@ -62,6 +62,41 @@ Visualization
 """
 
 
+def generate_label_matrix(model, weight_matrix, data, labels):
+    # https://medium.com/data-science/understanding-self-organising-map-neural-network-with-python-code-7a77f501e985
+    map = np.empty(shape=(model.map_width, model.map_height), dtype=object)
+
+    for row in range(model.map_width):
+        for col in range(model.map_height):
+            map[row][col] = []
+
+    for i, sample in enumerate(data):
+        dists = model.calculate_distance_func(weight_matrix, sample, 2)
+        min_index = np.argmin(dists)
+        bmu_idx = np.unravel_index(min_index, dists.shape)
+
+        map[bmu_idx[0]][bmu_idx[1]].append(labels[i])
+
+    for row in range(model.map_width):
+        for col in range(model.map_height):
+            label_list = map[row][col]
+            if len(label_list) == 0:
+                label = np.nan
+            else:
+                label = max(label_list, key=label_list.count)
+            map[row][col] = label
+
+    return map.astype(float)
+
+
+def generate_label_matrix_db(model, data, labels):
+    label_matrix_db = {}
+    for epoch, weight_matrix in model.weights_db.items():
+        label_matrix_db[epoch] = generate_label_matrix(model, weight_matrix, data, labels)
+
+    return label_matrix_db
+
+
 def visualize_label_matrix(map, y, epoch_num):
     y_unique = np.unique(y)
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
