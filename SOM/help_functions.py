@@ -154,16 +154,16 @@ def generate_u_matrix(weight_matrix):
     for r in range(m):
         for c in range(n):
             distances = []
-            current_neuron = weight_matrix[x, y]
-            coords_neighbours = [(m - 1, n), (m + 1, n), (m, n - 1), (m, n + 1)]
-            for nm, nn in coords_neighbours:
-                if 0 <= nn < n and 0 <= nm < m:
-                    neighbor_neuron = weight_matrix[nm, nn]
+            current_neuron = weight_matrix[r, c]
+            coords_neighbours = [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+            for rn, cn in coords_neighbours:
+                if 0 <= cn < n and 0 <= rn < m:
+                    neighbor_neuron = weight_matrix[rn, cn]
 
                     dist = np.linalg.norm(current_neuron - neighbor_neuron)
                     distances.append(dist)
 
-            u_matrix[x, y] = np.mean(distances)
+            u_matrix[r, c] = np.mean(distances)
 
     return u_matrix
 
