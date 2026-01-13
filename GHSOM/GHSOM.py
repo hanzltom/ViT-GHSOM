@@ -68,3 +68,23 @@ class GHSOM:
 
         return reference_val
 
+    def train(self, data):
+        layer0_val = self.initialize_layer0(data)
+
+        root_map = GSOM(self.input_dim, self.t1, self.training_epoch_num, layer0_val,
+                        self.calculate_distance_func, self.neighbourhood_func,
+                        self.calculate_decay, self.learning_rate, self.beta)
+
+        # Deque for maps, subdata and map_id
+        queue = deque([root_map, data, "1"])
+
+        while queue:
+            current_map, current_data, map_id = queue.popleft()
+
+            current_map.train_and_grow(current_data)
+            self.map_db[map_id] = current_map
+
+            self.check_and_expand(current_map, current_data, map_id, queue)
+
+    def check_and_expand(self, parent_map, parent_data, parent_id, queue):
+        pass
