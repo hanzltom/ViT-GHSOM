@@ -87,6 +87,7 @@ class GSOM:
 
     def calculate_unit_errors(self, data):
         unit_errors = np.zeros((self.current_row_num, self.current_col_num))
+        unit_hits = np.zeros((self.current_row_num, self.current_col_num))
 
         for sample in data:
             bmu_idx = self.find_BMU(sample)
@@ -95,21 +96,74 @@ class GSOM:
             dist = self.calculate_distance_func(weight, sample, 0)
 
             unit_errors[bmu_idx[0], bmu_idx[1]] += dist
+            unit_hits[bmu_idx[0], bmu_idx[1]] += 1
 
-        # Global MQE = Total Error / Total Samples
+        unit_hits_mask = unit_hits > 0
+        active_units_count = np.sum(unit_hits_mask)
+
+        # Global MQE = Total Error / number of active units in the GSOM
         total_error = np.sum(unit_errors)
-        global_mqe = total_error / len(data) if len(data) > 0 else 0
+        global_mqe = total_error / active_units_count if active_units_count > 0 else 0
 
         return unit_errors, global_mqe
 
+    def find_dissimilar_neighbour(self, e_idx):
+        e_weight = self.get_weight_of_node(e_idx)
+        r, c = e_idx
+        max_dist = 0
+        d_idx = None
+
+        coords_neighbours = [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+        for rn, cn in coords_neighbours:
+            if 0 <= cn < self.current_col_num and 0 <= rn < self.current_row_num:
+                neighbor_neuron = self.weights[rn, cn]
+
+                dist = self.calculate_distance_func(e_weight, neighbor_neuron, 0)
+                if dist > max_dist:
+                    max_dist = dist
+                    d_idx = (rn, cn)
+
+        return d_idx
+
+    def add_col_between(self, col1, col2):
+        # calculate weight of new col as mean of neighbours
+        new_col_weights = (self.weights[:, col1] + self.weights[:, col2]) / 2.0
+        self.weights = np.insert(self.weights, max(col1, col2), new_col_weights, axis=1)
+
+        self.current_col_num += 1
+
+    def add_row_between(self, row1, row2):
+        # calculate weight of new row as mean of neighbours
+        new_row_weights = (self.weights[row1] + self.weights[row2]) / 2.0
+        self.weights = np.insert(self.weights, max(row1, row2), new_row_weights, axis=0)
+
+        self.current_row_num += 1
+
+
     def grow(self, unit_error_matrix):
-        pass
+        max_index_flat = np.argmax(unit_error_matrix)
+        e_index = np.unravel_index(max_index_flat, unit_error_matrix.shape)
+
+        d_index = self.find_dissimilar_neighbour(e_index)
+
+        if d_index is None:
+            print("---------------------No neighbour found---------------")
+            return
+
+        er, ec = e_index
+        dr, dc = d_index
+
+        if er == dr: # same row
+            self.add_col_between(ec, dc)
+        elif ec == dc: # same col
+            self.add_row_between(er,dr)
+        else: raise ValueError("e_unit and d_unit not adjacent")
 
     def train_and_grow(self, data):
         while True:
             self.train(data)
 
-            unit_error_matrix, mqe = self.calculate_unit_errors()
+            unit_error_matrix, mqe = self.calculate_unit_errors(data)
 
             if mqe < self.horizontal_grow_condition:
                 break
