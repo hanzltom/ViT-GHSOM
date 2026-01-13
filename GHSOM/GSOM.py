@@ -36,6 +36,9 @@ class GSOM:
         bmu_idx = np.unravel_index(min_index, dists.shape)
         return bmu_idx
 
+    def get_weight_of_node(self, node_idx):
+        return self.weights[node_idx[0]][node_idx[1]]
+
     def update_time(self):
         self.time += 1
 
@@ -82,3 +85,38 @@ class GSOM:
             self.update_time()
 
 
+    def calculate_unit_errors(self, data):
+        unit_errors = np.zeros((self.current_row_num, self.current_col_num))
+
+        for sample in data:
+            bmu_idx = self.find_BMU(sample)
+
+            weight = self.get_weight_of_node(bmu_idx)
+            dist = self.calculate_distance_func(weight, sample, 0)
+
+            unit_errors[bmu_idx[0], bmu_idx[1]] += dist
+
+        # Global MQE = Total Error / Total Samples
+        total_error = np.sum(unit_errors)
+        global_mqe = total_error / len(data) if len(data) > 0 else 0
+
+        return unit_errors, global_mqe
+
+    def grow(self, unit_error_matrix):
+        pass
+
+    def train_and_grow(self, data):
+        while True:
+            self.train(data)
+
+            unit_error_matrix, mqe = self.calculate_unit_errors()
+
+            if mqe < self.horizontal_grow_condition:
+                break
+
+            self.grow(unit_error_matrix)
+            self.reset_time()
+
+            if self.current_row_num > 50 or self.current_col_num > 50:
+                print("Max GSOM size reached.")
+                break
