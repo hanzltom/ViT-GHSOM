@@ -2,18 +2,21 @@ import numpy as np
 from help_functions import *
 
 class GSOM:
-    def __init__(self, input_dim, t1, iteration_num, parent_qe, stopping_condition, learning_rate, sigma,
-                 calculate_distance_func, neighbourhood_func, calculate_decay, beta, initial_weights = None):
+    def __init__(self, input_dim, t1, training_epoch_num, parent_qe,
+                 learning_rate, beta, max_gsom_size,
+                 calculate_distance_func, neighbourhood_func, calculate_decay,
+                 initial_weights = None):
         self.input_dim = input_dim
-        self.t1 = t1
         self.time = 1
         self.current_row_num = 2
         self.current_col_num = 2
-        self.iteration_num = iteration_num
+        self.training_epoch_num = training_epoch_num
         self.horizontal_grow_condition = t1 * parent_qe
-        self.vertical_grow_condition = stopping_condition
         self.learning_rate = learning_rate
-        self.sigma = sigma
+        self.max_gsom_size = max_gsom_size
+
+        self.sigma = max(self.current_row_num, self.current_col_num) / 2.0
+
 
         if initial_weights is not None:
             self.weights = initial_weights
@@ -71,9 +74,9 @@ class GSOM:
         self.weights += eta_t * influence_new * diff
 
     def train(self, data):
-        num_samples = data.shape[0]
+        num_samples = len(data)
 
-        for epoch in range(self.iteration_num):
+        for epoch in range(self.training_epoch_num):
             indices = np.random.permutation(num_samples)
             for idx in indices:
                 input_vector = data[idx]
@@ -114,6 +117,7 @@ class GSOM:
         d_idx = None
 
         coords_neighbours = [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+        #np.random.shuffle(coords_neighbours)
         for rn, cn in coords_neighbours:
             if 0 <= cn < self.current_col_num and 0 <= rn < self.current_row_num:
                 neighbor_neuron = self.weights[rn, cn]
@@ -147,7 +151,8 @@ class GSOM:
         d_index = self.find_dissimilar_neighbour(e_index)
 
         if d_index is None:
-            print("---------------------No neighbour found---------------")
+            print(f"---------------------No neighbour found for {e_index}---------------")
+
             return
 
         er, ec = e_index
@@ -170,7 +175,8 @@ class GSOM:
 
             self.grow(unit_error_matrix)
             self.reset_time()
-
-            if self.current_row_num > 50 or self.current_col_num > 50:
-                print("Max GSOM size reached.")
-                break
+            print(f"Novy shape {self.current_row_num}, {self.current_col_num}")
+            if self.max_gsom_size is not None:
+                if self.current_row_num >= self.max_gsom_size or self.current_col_num >= self.max_gsom_size:
+                    print("Max GSOM size reached.")
+                    break

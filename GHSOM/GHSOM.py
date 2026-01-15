@@ -4,8 +4,8 @@ from collections import deque
 
 class GHSOM:
     def __init__(self, input_dim, t1, t2, training_epoch_num, learning_rate = 0.5,
-                 distance_k = 2, neighbourhood_function = 'gaussian', decay_type='exponential',
-                 beta=0.999, use_qe_for_vertical = True, min_samples_vertical_grow = 5):
+                 beta=0.999, use_qe_for_vertical=True, min_samples_vertical_grow=5, max_gsom_size=3,
+                 distance_k = 2, neighbourhood_function = 'gaussian', decay_type='exponential'):
 
         self.input_dim = input_dim
         self.t1 = t1
@@ -13,7 +13,9 @@ class GHSOM:
         self.training_epoch_num = training_epoch_num
         self.learning_rate = learning_rate
         self.beta = beta
+        self.use_qe_for_vertical = use_qe_for_vertical
         self.min_samples_vertical_grow = min_samples_vertical_grow
+        self.max_gsom_size = max_gsom_size
 
         self.layer0_weight = None
         self.global_stopping_criterion = 0 # vertical growth
@@ -50,7 +52,6 @@ class GHSOM:
         else:
             raise ValueError(f'Unknown decay type or invalid beta')
 
-        self.use_qe_for_vertical = use_qe_for_vertical
 
 
     def initialize_layer0(self, data):
@@ -72,9 +73,19 @@ class GHSOM:
     def train(self, data):
         layer0_val = self.initialize_layer0(data)
 
-        root_gsom = GSOM(self.input_dim, self.t1, self.training_epoch_num, layer0_val,
-                        self.calculate_distance_func, self.neighbourhood_func,
-                        self.calculate_decay, self.learning_rate, self.beta)
+        root_gsom = GSOM(
+            input_dim=self.input_dim,
+            t1=self.t1,
+            training_epoch_num=self.training_epoch_num,
+            parent_qe=layer0_val,
+            learning_rate=self.learning_rate,
+            beta=self.beta,
+            max_gsom_size=self.max_gsom_size,
+            calculate_distance_func=self.calculate_distance_func,
+            neighbourhood_func=self.neighbourhood_func,
+            calculate_decay=self.calculate_decay,
+            initial_weights=None
+        )
 
         # Deque for gsom, subdata and map_id
         queue = deque()
@@ -122,7 +133,6 @@ class GHSOM:
         unit_errors, _ = parent_gsom.calculate_unit_errors(parent_data)
 
         data_mapping = self.map_data_to_units(parent_gsom, parent_data)
-        data_num = 0
 
         for r in range(parent_gsom.current_row_num):
             for c in range(parent_gsom.current_col_num):
@@ -138,16 +148,26 @@ class GHSOM:
                     subset_data = data_mapping.get((r, c))
                     print(f"Condition to spawn child: subset len: {len(subset_data) if subset_data is not None else 0}")
 
-                    if subset_data is not None and len(subset_data) > self.min_samples_vertical_grow:
+                    if self.min_samples_vertical_grow is None or (subset_data is not None and len(subset_data) > self.min_samples_vertical_grow):
+
                         child_id = f"{parent_id}_{r}-{c}"
                         print(
                             f"   -> Spawning child {child_id} (Error: {unit_error_sum:.2f} > {self.global_stopping_criterion:.2f})")
 
                         child_init_weights = self.calculate_child_init_weights(parent_gsom, r, c)
 
-                        child_gsom = GSOM(self.input_dim, self.t1, self.training_epoch_num, unit_error_sum,
-                                        self.calculate_distance_func, self.neighbourhood_func,
-                                          self.calculate_decay, self.learning_rate, self.beta,
-                                          child_init_weights)
+                        child_gsom = GSOM(
+                            input_dim=self.input_dim,
+                            t1=self.t1,
+                            training_epoch_num=self.training_epoch_num,
+                            parent_qe=unit_error_sum,
+                            learning_rate=self.learning_rate,
+                            beta=self.beta,
+                            max_gsom_size=self.max_gsom_size,
+                            calculate_distance_func=self.calculate_distance_func,
+                            neighbourhood_func=self.neighbourhood_func,
+                            calculate_decay=self.calculate_decay,
+                            initial_weights=child_init_weights
+                        )
 
                         queue.append((child_gsom, subset_data, child_id))
