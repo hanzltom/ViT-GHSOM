@@ -101,6 +101,23 @@ class GHSOM:
 
         return mapping
 
+    def calculate_child_init_weights(self, parent_gsom, row, column):
+        parent_weight = parent_gsom.get_weight_of_node((row, column))
+
+        # get weights of the neighbours among the neuron which is being expanded
+        n_up = parent_gsom.get_weight_of_node((row - 1, column)) if row > 0 else parent_weight
+        n_down = parent_gsom.get_weight_of_node((row + 1, column)) if row < parent_gsom.current_row_num - 1 else parent_weight
+        n_left = parent_gsom.get_weight_of_node((row, column - 1)) if column > 0 else parent_weight
+        n_right = parent_gsom.get_weight_of_node((row, column + 1)) if column < parent_gsom.current_col_num - 1 else parent_weight
+
+        # interpolation
+        child_00 = (parent_weight + n_up + n_left) / 3
+        child_01 = (parent_weight + n_up + n_right) / 3
+        child_10 = (parent_weight + n_down + n_left) / 3
+        child_11 = (parent_weight + n_down + n_right) / 3
+
+        return np.array([[child_00, child_01], [child_10, child_11]])
+
     def check_and_expand(self, parent_gsom, parent_data, parent_id, queue):
         unit_errors, _ = parent_gsom.calculate_unit_errors(parent_data)
 
@@ -126,10 +143,11 @@ class GHSOM:
                         print(
                             f"   -> Spawning child {child_id} (Error: {unit_error_sum:.2f} > {self.global_stopping_criterion:.2f})")
 
-                        # TODO implement initialization of weights for child gsoms
+                        child_init_weights = self.calculate_child_init_weights(parent_gsom, r, c)
 
                         child_gsom = GSOM(self.input_dim, self.t1, self.training_epoch_num, unit_error_sum,
                                         self.calculate_distance_func, self.neighbourhood_func,
-                                          self.calculate_decay, self.learning_rate, self.beta)
+                                          self.calculate_decay, self.learning_rate, self.beta,
+                                          child_init_weights)
 
                         queue.append((child_gsom, subset_data, child_id))
