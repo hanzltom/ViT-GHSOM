@@ -1,3 +1,5 @@
+import numpy as np
+
 from help_functions import *
 from GSOM import GSOM
 from collections import deque
@@ -19,7 +21,7 @@ class GHSOM:
 
         self.layer0_weight = None
         self.global_stopping_criterion = 0 # vertical growth
-        self.map_db = {}
+        self.gsom_db = {}
 
         if distance_k == np.inf:
             self.calculate_distance_func = chebyshev_distance
@@ -96,7 +98,7 @@ class GHSOM:
             current_gsom, current_data, map_id = queue.popleft()
             print(f"Training gsom: {map_id}")
             current_gsom.train_and_grow(current_data)
-            self.map_db[map_id] = current_gsom
+            self.gsom_db[map_id] = current_gsom
 
             self.check_and_expand(current_gsom, current_data, map_id, queue)
 
@@ -109,6 +111,19 @@ class GHSOM:
             if bmu_idx not in mapping.keys():
                 mapping[bmu_idx] = []
             mapping[bmu_idx].append(sample)
+
+        return mapping
+
+    def map_data_with_labels_to_units(self, gsom_instance, data, y):
+        mapping = {}
+
+        for i, sample in enumerate(data):
+            bmu_idx = gsom_instance.find_BMU(sample)
+
+            if bmu_idx not in mapping.keys():
+                mapping[bmu_idx] = [[],[]]
+            mapping[bmu_idx][0].append(sample)
+            mapping[bmu_idx][1].append(y[i])
 
         return mapping
 
@@ -171,3 +186,38 @@ class GHSOM:
                         )
 
                         queue.append((child_gsom, subset_data, child_id))
+
+    def get_labels(self, X, y, label_names):
+        # BFS (current_gsom, current_data_index, map_id)
+        queue = deque([(self.gsom_db["1"], X, y, "1")])
+
+        hierarchy_labels = {}
+
+        while queue:
+            curr_gsom, curr_X, curr_y, curr_map_id = queue.popleft()
+
+            if len(curr_X) == 0: continue # empty neuron
+
+            # Map data to units in current map
+            mapping = self.map_data_with_labels_to_units(curr_gsom, curr_X, curr_y)
+
+            for r in range(curr_gsom.current_row_num):
+                for c in range(curr_gsom.current_col_num):
+                    unit_id = f"{curr_map_id}_{r}-{c}"
+
+                    unit_data = mapping.get((r, c))
+
+                    if unit_data is None:
+                        hierarchy_labels[unit_id] = "Empty"
+                        continue
+
+                    subset_X, subset_y = unit_data
+                    counts = np.bincount(subset_y)
+                    majority_class_idx = np.argmax(counts)
+                    hierarchy_labels[unit_id] = label_names[majority_class_idx]
+
+                    # check for child gsom and if so add to bfs
+                    if unit_id in self.gsom_db.keys():
+                        queue.append((self.gsom_db[unit_id], subset_X, subset_y, unit_id))
+
+        return hierarchy_labels
