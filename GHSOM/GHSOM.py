@@ -5,7 +5,7 @@ from collections import deque
 class GHSOM:
     def __init__(self, input_dim, t1, t2, training_epoch_num, learning_rate = 0.5,
                  distance_k = 2, neighbourhood_function = 'gaussian', decay_type='exponential',
-                 beta=0.999, use_qe_for_vertical = True):
+                 beta=0.999, use_qe_for_vertical = True, min_samples_vertical_grow = 5):
 
         self.input_dim = input_dim
         self.t1 = t1
@@ -13,6 +13,7 @@ class GHSOM:
         self.training_epoch_num = training_epoch_num
         self.learning_rate = learning_rate
         self.beta = beta
+        self.min_samples_vertical_grow = min_samples_vertical_grow
 
         self.layer0_weight = None
         self.global_stopping_criterion = 0 # vertical growth
@@ -71,20 +72,64 @@ class GHSOM:
     def train(self, data):
         layer0_val = self.initialize_layer0(data)
 
-        root_map = GSOM(self.input_dim, self.t1, self.training_epoch_num, layer0_val,
+        root_gsom = GSOM(self.input_dim, self.t1, self.training_epoch_num, layer0_val,
                         self.calculate_distance_func, self.neighbourhood_func,
                         self.calculate_decay, self.learning_rate, self.beta)
 
-        # Deque for maps, subdata and map_id
-        queue = deque([root_map, data, "1"])
+        # Deque for gsom, subdata and map_id
+        queue = deque()
+        queue.append((root_gsom, data, "1"))
 
+        # BFS for expanding maps
         while queue:
-            current_map, current_data, map_id = queue.popleft()
+            current_gsom, current_data, map_id = queue.popleft()
+            print(f"Training gsom: {map_id}")
+            current_gsom.train_and_grow(current_data)
+            self.map_db[map_id] = current_gsom
 
-            current_map.train_and_grow(current_data)
-            self.map_db[map_id] = current_map
+            self.check_and_expand(current_gsom, current_data, map_id, queue)
 
-            self.check_and_expand(current_map, current_data, map_id, queue)
+    def map_data_to_units(self, gsom_instance, data):
+        mapping = {}
 
-    def check_and_expand(self, parent_map, parent_data, parent_id, queue):
-        pass
+        for sample in data:
+            bmu_idx = gsom_instance.find_BMU(sample)
+
+            if bmu_idx not in mapping.keys():
+                mapping[bmu_idx] = []
+            mapping[bmu_idx].append(sample)
+
+        return mapping
+
+    def check_and_expand(self, parent_gsom, parent_data, parent_id, queue):
+        unit_errors, _ = parent_gsom.calculate_unit_errors(parent_data)
+
+        data_mapping = self.map_data_to_units(parent_gsom, parent_data)
+        data_num = 0
+
+        for r in range(parent_gsom.current_row_num):
+            for c in range(parent_gsom.current_col_num):
+                print(f"Checking idx ({r}, {c}), num of samples: {len(data_mapping.get((r, c))) if data_mapping.get((r, c)) else 0}")
+                unit_error_sum = unit_errors[r][c]
+
+                if not self.use_qe_for_vertical:
+                    samples_on_unit = len(data_mapping.get((r,c), []))
+                    if samples_on_unit > 0:
+                        unit_error_sum /= samples_on_unit
+                print(f"Qe: {unit_error_sum}, > {self.global_stopping_criterion}")
+                if unit_error_sum > self.global_stopping_criterion:
+                    subset_data = data_mapping.get((r, c))
+                    print(f"Condition to spawn child: subset len: {len(subset_data) if subset_data is not None else 0}")
+
+                    if subset_data is not None and len(subset_data) > self.min_samples_vertical_grow:
+                        child_id = f"{parent_id}_{r}-{c}"
+                        print(
+                            f"   -> Spawning child {child_id} (Error: {unit_error_sum:.2f} > {self.global_stopping_criterion:.2f})")
+
+                        # TODO implement initialization of weights for child gsoms
+
+                        child_gsom = GSOM(self.input_dim, self.t1, self.training_epoch_num, unit_error_sum,
+                                        self.calculate_distance_func, self.neighbourhood_func,
+                                          self.calculate_decay, self.learning_rate, self.beta)
+
+                        queue.append((child_gsom, subset_data, child_id))
