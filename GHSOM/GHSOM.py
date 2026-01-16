@@ -68,7 +68,7 @@ class GHSOM:
             reference_val = np.mean(dists)
 
         self.global_stopping_criterion = self.t2 * reference_val
-        print(f"Layer 0 Initialized, Global stopping criterion (tau2): {self.global_stopping_criterion:.4f}")
+        print(f"Layer 0 Initialized, Global stopping criterion (tau2 * (qe0 or mqe0)): {self.global_stopping_criterion:.4f}")
 
         return reference_val
 
@@ -96,7 +96,7 @@ class GHSOM:
         # BFS for expanding maps
         while queue:
             current_gsom, current_data, map_id = queue.popleft()
-            print(f"Training gsom: {map_id}")
+
             current_gsom.train_and_grow(current_data)
             self.gsom_db[map_id] = current_gsom
 
@@ -151,23 +151,22 @@ class GHSOM:
 
         for r in range(parent_gsom.current_row_num):
             for c in range(parent_gsom.current_col_num):
-                print(f"Checking idx ({r}, {c}), num of samples: {len(data_mapping.get((r, c))) if data_mapping.get((r, c)) else 0}")
+
                 unit_error_sum = unit_errors[r][c]
 
                 if not self.use_qe_for_vertical:
                     samples_on_unit = len(data_mapping.get((r,c), []))
                     if samples_on_unit > 0:
                         unit_error_sum /= samples_on_unit
-                print(f"Qe: {unit_error_sum}, > {self.global_stopping_criterion}")
+
                 if unit_error_sum > self.global_stopping_criterion:
                     subset_data = data_mapping.get((r, c))
-                    print(f"Condition to spawn child: subset len: {len(subset_data) if subset_data is not None else 0}")
 
                     if self.min_samples_vertical_grow is None or (subset_data is not None and len(subset_data) > self.min_samples_vertical_grow):
 
                         child_id = f"{parent_id}_{r}-{c}"
                         print(
-                            f"   -> Spawning child {child_id} (Error: {unit_error_sum:.2f} > {self.global_stopping_criterion:.2f})")
+                            f"   -> Spawning child {child_id} Num of samples: {len(subset_data)}, Error: {unit_error_sum:.2f} > {self.global_stopping_criterion:.2f})")
 
                         child_init_weights = self.calculate_child_init_weights(parent_gsom, r, c)
 
@@ -187,9 +186,9 @@ class GHSOM:
 
                         queue.append((child_gsom, subset_data, child_id))
 
-    def get_labels(self, X, y, label_names):
+    def get_labels(self, X, y_int, label_names):
         # BFS (current_gsom, current_data_index, map_id)
-        queue = deque([(self.gsom_db["1"], X, y, "1")])
+        queue = deque([(self.gsom_db["1"], X, y_int, "1")])
 
         hierarchy_labels = {}
 
