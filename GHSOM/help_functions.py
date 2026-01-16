@@ -159,11 +159,11 @@ def draw_recursive(ax, ghsom, map_id, x_start, y_start, width, height, label_map
     ax.add_patch(outline)
 
 
-def plot_ghsom(ghsom_instance, X_full, y_full, label_names):
-    hierarchy_label_map = ghsom_instance.get_labels(X_full, y_full, label_names)
+def plot_ghsom(ghsom_instance, X, y_int, label_names):
+    hierarchy_label_map = ghsom_instance.get_labels(X, y_int, label_names)
 
     unique_labels = [l for l in label_names if l in hierarchy_label_map.values()]
-    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink']
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink' 'tab:olive', 'tab:cyan']
     label_to_color = {label: color_options[i % len(color_options)] for i, label in enumerate(unique_labels)}
     label_to_color["Empty"] = "tab:grey"
 
