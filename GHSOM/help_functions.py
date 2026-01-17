@@ -163,7 +163,7 @@ def plot_ghsom(ghsom_instance, X, y_int, label_names):
     hierarchy_label_map = ghsom_instance.get_labels(X, y_int, label_names)
 
     unique_labels = [l for l in label_names if l in hierarchy_label_map.values()]
-    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink' 'tab:olive', 'tab:cyan']
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:olive', 'tab:cyan']
     label_to_color = {label: color_options[i % len(color_options)] for i, label in enumerate(unique_labels)}
     label_to_color["Empty"] = "tab:grey"
 
@@ -172,12 +172,13 @@ def plot_ghsom(ghsom_instance, X, y_int, label_names):
     # canvas bounds
     canvas_x, canvas_y = 0.0, 0.0
     canvas_w, canvas_h = 1.0, 1.0
+    max_depth = max([key.count('_') for key in ghsom_instance.gsom_db.keys()]) + 1
 
     draw_recursive(ax, ghsom_instance, "1", canvas_x, canvas_y, canvas_w, canvas_h, hierarchy_label_map, label_to_color,
                    depth=0)
 
     ax.axis('off')
-    ax.set_title(f"GHSOM Structure")
+    ax.set_title(f"GHSOM Structure (Max Depth: {max_depth})")
     patches = [mpatches.Patch(color=label_to_color[l], label=l) for l in unique_labels]
     ax.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
     plt.show()
