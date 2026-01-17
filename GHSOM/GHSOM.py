@@ -220,3 +220,37 @@ class GHSOM:
                         queue.append((self.gsom_db[unit_id], subset_X, subset_y, unit_id))
 
         return hierarchy_labels
+
+    def calculate_global_qe(self, X):
+        queue = deque([(self.gsom_db["1"], X, "1")])
+
+        total_global_qe = 0
+
+        while queue:
+            curr_gsom, curr_X, curr_map_id = queue.popleft()
+
+            if len(curr_X) == 0: continue
+
+            mapping = self.map_data_to_units(curr_gsom, curr_X)
+            for r in range(curr_gsom.current_row_num):
+                for c in range(curr_gsom.current_col_num):
+                    unit_id = f"{curr_map_id}_{r}-{c}"
+
+                    samples_list = mapping.get((r, c))
+
+                    if samples_list is None or len(samples_list) == 0:
+                        continue
+
+                    samples_on_unit = np.array(samples_list)
+
+                    if unit_id in self.gsom_db.keys():
+                        queue.append((self.gsom_db[unit_id], samples_on_unit, unit_id))
+                    else:
+                        weight_of_leaf = curr_gsom.get_weight_of_node((r,c))
+
+                        # broadcasting weight x array of samples
+                        dists = self.calculate_distance_func(weight_of_leaf, samples_on_unit, 1)
+                        total_global_qe += np.sum(dists)
+
+        return total_global_qe / X.shape[0]
+
