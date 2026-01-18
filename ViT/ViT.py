@@ -16,7 +16,7 @@ def unpatch(x, patch_size=4, channels=1):
     B, num_patches, pixels_per_patch = x.shape
 
     if pixels_per_patch != channels * patch_size * patch_size:
-        raise ValueError('Patch size must be equal to channels * patch_size * patch_size')
+        raise ValueError(f'Number of pixels in patch {pixels_per_patch} must be equal to channels * patch_size * patch_size: {channels * patch_size * patch_size}')
 
     # get size of the grid
     # sqrt(49) = 7 -> 7x7 grid of patches
@@ -139,7 +139,7 @@ class ViTEncoder(nn.Module):
 
 
 class ViTDecoder(nn.Module):
-    def __init__(self, num_patches, embed_dim=16, output_dim=1, depth=2, num_heads=2, mlp_dim=64, patch_size=4):
+    def __init__(self, num_patches, patch_size=4, output_dim = 1, embed_dim=16, depth=2, num_heads=2, mlp_dim=64):
         super().__init__()
 
         # reconstruction to original pixels: patch_size * patch_size * channels
@@ -180,12 +180,15 @@ class AutoEncoder(nn.Module):
 
         assert img_size % patch_size == 0, f"Image size ({img_size}) must be divisible by patch size ({patch_size})."
 
+        self.num_of_channels = num_of_channels
+        self.patch_size = patch_size
+
         self.encoder = ViTEncoder(img_size, patch_size, num_of_channels, embed_dim, enc_depth, num_heads, mlp_dim)
         num_of_patches = (img_size // patch_size) ** 2
-        self.decoder = ViTDecoder(num_of_patches, embed_dim, num_of_channels, dec_depth, num_heads, mlp_dim, patch_size)
+        self.decoder = ViTDecoder(num_of_patches, patch_size, num_of_channels, embed_dim, dec_depth, num_heads, mlp_dim)
 
     def forward(self, x):
         latent = self.encoder(x)
         patched_output = self.decoder(latent)
-        output = unpatch(patched_output)
+        output = unpatch(patched_output, self.patch_size, self.num_of_channels)
         return output
