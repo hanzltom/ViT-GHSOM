@@ -10,6 +10,35 @@ https://medium.com/@brianpulfer/vision-transformers-from-scratch-pytorch-a-step-
 https://www.geeksforgeeks.org/deep-learning/how-to-use-pytorchs-nnmultiheadattention/
 """
 
+
+def unpatch(x, patch_size=4, channels=1):
+    # E.g. (8, 49, 3*4*4): batch of 8, 7x7 grid, num_of_channels * patch_size * patch_size
+    B, num_patches, pixels_per_patch = x.shape
+
+    if pixels_per_patch != channels * patch_size * patch_size:
+        raise ValueError('Patch size must be equal to channels * patch_size * patch_size')
+
+    # get size of the grid
+    # sqrt(49) = 7 -> 7x7 grid of patches
+    grid_h = int(num_patches ** 0.5)
+    grid_w = int(num_patches ** 0.5)
+
+    # (B, 49, 48) -> (B, 49, 3, 4, 4): (batch, num_patches, num_of_channels, patch_height, patch_width)
+    x = x.reshape(B, num_patches, channels, patch_size, patch_size)
+
+    # (B, 49, 3, 4, 4) -> (B, 7, 7, 3, 4, 4): (Batch, grid_H, grid_W, num_of_channels, patch_H, patch_W)
+    x = x.reshape(B, grid_h, grid_w, channels, patch_size, patch_size)
+
+    # (Batch, grid_H, grid_W, num_of_channels, patch_H, patch_W) -> (Batch, num_of_channels, grid_H, patch_H, grid_W, patch_W)
+    # (B, 7, 7, 3, 4, 4) -> (B, 3, 7, 4, 7, 4)
+    x = x.permute(0, 3, 1, 4, 2, 5)
+
+    # get original size of image
+    # (B, 3, 7, 4, 7, 4) -> (B, 3, 7 * 4, 7 * 4)
+    x = x.reshape(B, channels, grid_h * patch_size, grid_w * patch_size)
+
+    return x
+
 class PatchEmbedding(nn.Module):
     def __init__(self, img_size=28, patch_size=4, in_channels=1, embed_dim=16):
         super().__init__()
@@ -157,5 +186,6 @@ class AutoEncoder(nn.Module):
 
     def forward(self, x):
         latent = self.encoder(x)
-        output = self.decoder(latent)
+        patched_output = self.decoder(latent)
+        output = unpatch(patched_output)
         return output
