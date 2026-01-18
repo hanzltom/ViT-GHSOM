@@ -17,16 +17,16 @@ class PatchEmbedding(nn.Module):
         self.patch_size = patch_size
         self.num_patches = (img_size // patch_size) ** 2
 
-        # convolution with the stride size as patch size -> no overlapping
+        # convolution with the stride size same as patch size -> no overlapping
         self.proj = nn.Conv2d(in_channels, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
-        # Example: batch = 8, embed_dim=16, img_height=28, img_width=28, input_channels=1
+        # Example: batch = 8, embed_dim=64, img_height=28, img_width=28, input_channels=1, patch_size=4
         # x.shape: (8, 1, 28, 28)
         # 28 / 4 = 7 -> 7x7 grid
-        # proj(x).shape: (8, 16, 7, 7)
-        # proj(x).flatten(2): (8, 16, 7 * 7)
-        # proj(x).flatten(2).transpose(1, 2): (8, 49, 16)
+        # proj(x).shape: (8, 64, 7, 7)
+        # proj(x).flatten(2): (8, 64, 7 * 7)
+        # proj(x).flatten(2).transpose(1, 2): (8, 49, 16) : (B, 7x7 grid as sequence, embed_dim)
         x = self.proj(x).flatten(2)
         x = x.transpose(1, 2)
         return x
@@ -137,9 +137,25 @@ class ViTDecoder(nn.Module):
             x = block(x)
 
         x = self.ln1(x)
-        # removing CLS token (e.g. from PatchEmbedding (8, 50, 16) -> (8, 49, 16))
+        # removing CLS token (e.g. from PatchEmbedding (8, 50, 64) -> (8, 49, 64))
         x = x[:, 1:, :]
 
         # projection back to pixel space
-        x = self.head(x)  # e.g. (8, 49, 16) since embed_dim and pixels_per_patch = 4*4 is the same
+        x = self.head(x)  # e.g. (8, 49, 64) -> (8, 49, 16): (B, grid 7x7, pixels per patch)
         return x
+
+class AutoEncoder(nn.Module):
+    def __init__(self, img_size=28, patch_size=4, num_of_channels=1,
+                 embed_dim=16, enc_depth=4, dec_depth=2, num_heads=2, mlp_dim=64):
+        super().__init__()
+
+        assert img_size % patch_size == 0, f"Image size ({img_size}) must be divisible by patch size ({patch_size})."
+
+        self.encoder = ViTEncoder(img_size, patch_size, num_of_channels, embed_dim, enc_depth, num_heads, mlp_dim)
+        num_of_patches = (img_size // patch_size) ** 2
+        self.decoder = ViTDecoder(num_of_patches, embed_dim, num_of_channels, dec_depth, num_heads, mlp_dim, patch_size)
+
+    def forward(self, x):
+        latent = self.encoder(x)
+        output = self.decoder(latent)
+        return output
