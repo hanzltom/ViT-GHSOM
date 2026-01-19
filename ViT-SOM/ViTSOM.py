@@ -45,9 +45,12 @@ class ViTSOMLoss(nn.Module):
 
     def forward(self, original_img, reconstructed, latent_vectors, som_weights, grid_coords, sigma):
         l_nn = self.mseLoss(original_img, reconstructed)
-        l_som = self.somLoss(latent_vectors, som_weights, grid_coords, sigma)
-        return (self.lambda_som * l_som) + l_nn         # Eq. 6
 
+        # latent vector shape: (batch, sequence of patches + cls, embed_dim), sequence of patches not needed for som
+        som_input = latent_vectors[:,0,:]
+        l_som = self.somLoss(som_input, som_weights, grid_coords, sigma)
+        l_total = (self.lambda_som * l_som) + l_nn
+        return l_total, l_nn, l_som        # Eq. 6
 
 
 def unpatch(x, patch_size=4, channels=1):
@@ -214,7 +217,7 @@ class ViTDecoder(nn.Module):
 
 class AutoEncoder(nn.Module):
     def __init__(self, img_size=28, patch_size=4, num_of_channels=1,
-                 embed_dim=16, enc_depth=4, dec_depth=2, num_heads=2, mlp_dim=64):
+                 embed_dim=16, enc_depth=4, dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 5, som_cols = 5):
         super().__init__()
 
         assert img_size % patch_size == 0, f"Image size ({img_size}) must be divisible by patch size ({patch_size})."
@@ -223,13 +226,24 @@ class AutoEncoder(nn.Module):
         self.patch_size = patch_size
 
         self.encoder = ViTEncoder(img_size, patch_size, num_of_channels, embed_dim, enc_depth, num_heads, mlp_dim)
-        num_of_patches = (img_size // patch_size) ** 2
-        self.decoder = ViTDecoder(num_of_patches, patch_size, num_of_channels, embed_dim, dec_depth, num_heads, mlp_dim)
+        self.num_of_patches = (img_size // patch_size) ** 2
+        self.decoder = ViTDecoder(self.num_of_patches, patch_size, num_of_channels, embed_dim, dec_depth, num_heads, mlp_dim)
 
-        self.som_weights = nn.Parameter(torch.rand(self.num_of_patches, embed_dim))
+        self.som_rows = som_rows
+        self.som_cols = som_cols
+        self.som_weights = nn.Parameter(torch.randn(self.som_rows * self.som_cols, embed_dim))
 
     def forward(self, x):
         latent = self.encoder(x)
         patched_output = self.decoder(latent)
         output = unpatch(patched_output, self.patch_size, self.num_of_channels)
-        return output
+        return output, latent
+
+    def get_sigma(self):
+        return np.ceil(self.som_rows / 2)
+
+    def get_som_shape(self):
+        return self.som_rows, self.som_cols
+
+    def get_som_weights(self):
+        return self.som_weights
