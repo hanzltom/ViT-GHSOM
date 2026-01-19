@@ -2,6 +2,7 @@ import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+from sklearn import metrics
 
 """
 Distance functions
@@ -98,7 +99,7 @@ def decay_power(initial_value, beta, t):
     return initial_value * (t ** beta)
 
 """
-Grid coordinates for distance influence
+Other functions
 """
 def get_grid_coords(row_num, col_num, device):
     y_coords, x_coords = torch.meshgrid(
@@ -111,3 +112,29 @@ torch.arange(row_num, dtype=torch.float32),
     # reshape them to shape (num_units, 2)
     coords = torch.stack((x_coords, y_coords), dim=-1).reshape(-1, 2)
     return coords.to(device)
+
+def calculate_purity(model, loader, device):
+# https://stackoverflow.com/questions/34047540/python-clustering-purity-metric
+    model.eval()
+    true_label = []
+    cluster_labels = []
+
+    with torch.no_grad():
+        for images, labels in loader:
+            images = images.to(device)
+
+            _, latent = model(images)
+
+            # extract cls token with sequence of patches - not needed
+            # shape (batch, embed_dim)
+            latent = latent[:,0,:]
+
+            # calculate distance, shape (batch, neuron unit num)
+            dists = cosine_distance_numpy(latent, model.get_som_weights())
+
+            bmu_indices = torch.argmin(dists, dim=1)
+            true_label.extend(labels.cpu().numpy())
+            cluster_labels.extend(bmu_indices.cpu().numpy())
+
+        contingency_matrix = metrics.cluster.contingency_matrix(true_label, cluster_labels)
+        return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
