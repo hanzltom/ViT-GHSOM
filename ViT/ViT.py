@@ -5,9 +5,10 @@ import numpy as np
 
 """
 https://tintn.github.io/Implementing-Vision-Transformer-from-Scratch/
+https://www.geeksforgeeks.org/deep-learning/how-to-use-pytorchs-nnmultiheadattention/
+https://www.geeksforgeeks.org/deep-learning/implementing-an-autoencoder-in-pytorch/
 https://github.com/lucidrains/vit-pytorch/blob/main/vit_pytorch/vit.py
 https://medium.com/@brianpulfer/vision-transformers-from-scratch-pytorch-a-step-by-step-guide-96c3313c2e0c
-https://www.geeksforgeeks.org/deep-learning/how-to-use-pytorchs-nnmultiheadattention/
 """
 
 
