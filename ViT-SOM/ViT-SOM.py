@@ -226,7 +226,7 @@ class AutoEncoder(nn.Module):
         num_of_patches = (img_size // patch_size) ** 2
         self.decoder = ViTDecoder(num_of_patches, patch_size, num_of_channels, embed_dim, dec_depth, num_heads, mlp_dim)
 
-        self.som_weights = nn.Parameter(torch.randn(self.num_of_patches, embed_dim) * 0.02)
+        self.som_weights = nn.Parameter(torch.rand(self.num_of_patches, embed_dim))
 
     def forward(self, x):
         latent = self.encoder(x)
