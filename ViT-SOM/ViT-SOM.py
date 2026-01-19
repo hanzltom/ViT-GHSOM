@@ -36,6 +36,17 @@ class SomLoss(nn.Module):
         loss = neighbourhood_influence * dists
         return loss.sum(dim=1).mean() # Equation 3
 
+class ViTSOMLoss(nn.Module):
+    def __init__(self, lambda_som=1):
+        super().__init__()
+        self.lambda_som = lambda_som
+        self.mseLoss = nn.MSELoss()
+        self.somLoss = SomLoss()
+
+    def forward(self, original_img, reconstructed, latent_vectors, som_weights, grid_coords, sigma):
+        l_nn = self.mseLoss(original_img, reconstructed)
+        l_som = self.somLoss(latent_vectors, som_weights, grid_coords, sigma)
+        return (self.lambda_som * l_som) + l_nn         # Eq. 6
 
 
 
