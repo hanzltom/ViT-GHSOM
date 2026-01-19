@@ -240,7 +240,7 @@ class AutoEncoder(nn.Module):
         return output, latent
 
     def get_sigma(self):
-        return np.ceil(self.som_rows / 2)
+        return np.ceil(min(self.som_rows, self.som_cols) / 2)
 
     def get_som_shape(self):
         return self.som_rows, self.som_cols
