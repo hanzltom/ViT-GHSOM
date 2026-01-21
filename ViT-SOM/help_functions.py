@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 from sklearn import metrics
+import umap
+import matplotlib.pyplot as plt
 
 """
 Distance functions
@@ -138,3 +140,39 @@ def calculate_purity(model, loader, device):
 
         contingency_matrix = metrics.cluster.contingency_matrix(true_label, cluster_labels)
         return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
+
+
+def capture_latent(model, loader, device):
+    model.eval()
+    labels_vector = []
+    latent_vectors = []
+
+    with torch.no_grad():
+        for images, labels in loader:
+            images = images.to(device)
+            _, latent = model(images)
+            latent = latent[:,0,:]
+            latent_vectors.append(latent.cpu().numpy())
+            labels_vector.append(labels.cpu().numpy())
+
+    X = np.concatenate(latent_vectors, axis=0)
+    y = np.concatenate(labels_vector, axis=0)
+
+    model.train()
+
+    output = (X,y)
+    return output
+
+
+def plot_umap(snapshot):
+    for epoch, (X,y) in snapshot.items():
+
+        reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='cosine', random_state=42)
+        embedding = reducer.fit_transform(X)
+
+        plt.figure(figsize=(10, 8))
+        scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=y, cmap='tab10')
+        plt.colorbar(scatter, ticks=range(10), label='Digit Class')
+        plt.title(f"UMAP, epoch: {epoch}")
+        #plt.grid(True, alpha=0.3)
+        plt.show()
