@@ -124,6 +124,7 @@ def calculate_purity(model, loader, device):
     with torch.no_grad():
         for images, labels in loader:
             images = images.to(device)
+            labels = labels.to(device)
 
             _, latent = model(images)
 
@@ -132,14 +133,17 @@ def calculate_purity(model, loader, device):
             latent = latent[:,0,:]
 
             # calculate distance, shape (batch, neuron unit num)
-            dists = cosine_distance_torch(latent, model.get_som_weights())
+            dists = cosine_distance_torch(model.get_som_weights(), latent)
 
             bmu_indices = torch.argmin(dists, dim=1)
-            true_label.extend(labels.cpu().numpy())
-            cluster_labels.extend(bmu_indices.cpu().numpy())
+            true_label.append(labels)
+            cluster_labels.append(bmu_indices)
 
-        contingency_matrix = metrics.cluster.contingency_matrix(true_label, cluster_labels)
-        return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
+    true_labels_np = torch.cat(true_label).cpu().numpy()
+    cluster_labels_np = torch.cat(cluster_labels).cpu().numpy()
+    
+    contingency_matrix = metrics.cluster.contingency_matrix(true_labels_np, cluster_labels_np)
+    return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
 
 
 def capture_latent(model, loader, device):
@@ -174,5 +178,4 @@ def plot_umap(snapshot):
         scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=y, cmap='tab10')
         plt.colorbar(scatter, ticks=range(10), label='Digit Class')
         plt.title(f"UMAP, epoch: {epoch}")
-        #plt.grid(True, alpha=0.3)
         plt.show()
