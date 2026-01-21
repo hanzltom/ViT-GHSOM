@@ -159,7 +159,7 @@ def capture_latent(model, loader, device):
         for images, labels in loader:
             images = images.to(device)
             _, latent = model(images)
-            latent = latent[:,0,:]
+            latent = latent[:,1:,:]
             latent_vectors.append(latent.cpu().numpy())
             labels_vector.append(labels.cpu().numpy())
 
