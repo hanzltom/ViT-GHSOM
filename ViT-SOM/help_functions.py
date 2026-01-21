@@ -130,7 +130,7 @@ def calculate_purity(model, loader, device):
             latent = latent[:,0,:]
 
             # calculate distance, shape (batch, neuron unit num)
-            dists = cosine_distance_numpy(latent, model.get_som_weights())
+            dists = cosine_distance_torch(latent, model.get_som_weights())
 
             bmu_indices = torch.argmin(dists, dim=1)
             true_label.extend(labels.cpu().numpy())
