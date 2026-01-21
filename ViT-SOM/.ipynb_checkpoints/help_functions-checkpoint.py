@@ -130,10 +130,14 @@ def calculate_purity(model, loader, device):
 
             # extract cls token with sequence of patches - not needed
             # shape (batch, embed_dim)
-            latent = latent[:,0,:]
+            #latent = latent[:,0,:]
+            patches = latent[:, 1:, :] 
+            
+            # 2. Flatten: (Batch, 784)
+            som_input = patches.reshape(patches.shape[0], -1)
 
             # calculate distance, shape (batch, neuron unit num)
-            dists = cosine_distance_torch(model.get_som_weights(), latent)
+            dists = cosine_distance_torch(model.get_som_weights(), som_input)
 
             bmu_indices = torch.argmin(dists, dim=1)
             true_label.append(labels)
@@ -178,5 +182,4 @@ def plot_umap(snapshot):
         scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=y, cmap='tab10')
         plt.colorbar(scatter, ticks=range(10), label='Digit Class')
         plt.title(f"UMAP, epoch: {epoch}")
-        #plt.grid(True, alpha=0.3)
         plt.show()

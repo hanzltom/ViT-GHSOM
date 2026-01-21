@@ -130,10 +130,14 @@ def calculate_purity(model, loader, device):
 
             # extract cls token with sequence of patches - not needed
             # shape (batch, embed_dim)
-            latent = latent[:,0,:]
+            #latent = latent[:,0,:]
+            patches = latent[:, 1:, :] 
+            
+            # 2. Flatten: (Batch, 784)
+            som_input = patches.reshape(patches.shape[0], -1)
 
             # calculate distance, shape (batch, neuron unit num)
-            dists = cosine_distance_torch(model.get_som_weights(), latent)
+            dists = cosine_distance_torch(model.get_som_weights(), som_input)
 
             bmu_indices = torch.argmin(dists, dim=1)
             true_label.append(labels)

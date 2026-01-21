@@ -37,19 +37,22 @@ class SomLoss(nn.Module):
         return loss.sum(dim=1).mean() # Equation 3
 
 class ViTSOMLoss(nn.Module):
-    def __init__(self, lambda_som=1):
+    def __init__(self):
         super().__init__()
-        self.lambda_som = lambda_som
+        
         self.mseLoss = nn.MSELoss()
         self.somLoss = SomLoss()
 
-    def forward(self, original_img, reconstructed, latent_vectors, som_weights, grid_coords, sigma):
+    def forward(self, original_img, reconstructed, latent_vectors, som_weights, grid_coords, sigma, current_lamda):
         l_nn = self.mseLoss(original_img, reconstructed)
 
         # latent vector shape: (batch, sequence of patches + cls, embed_dim), sequence of patches not needed for som
-        som_input = latent_vectors[:,0,:]
+        #som_input = latent_vectors[:,0,:]
+        patches = latent_vectors[:, 1:, :] 
+        
+        som_input = patches.reshape(patches.shape[0], -1)
         l_som = self.somLoss(som_input, som_weights, grid_coords, sigma)
-        l_total = (self.lambda_som * l_som) + l_nn
+        l_total = (current_lamda * l_som) + l_nn
         return l_total, l_nn, l_som        # Eq. 6
 
 
@@ -231,7 +234,7 @@ class AutoEncoder(nn.Module):
 
         self.som_rows = som_rows
         self.som_cols = som_cols
-        self.som_weights = nn.Parameter(torch.randn(self.som_rows * self.som_cols, embed_dim))
+        self.som_weights = nn.Parameter(torch.randn(self.som_rows * self.som_cols, self.num_of_patches * embed_dim))
 
     def forward(self, x):
         latent = self.encoder(x)
