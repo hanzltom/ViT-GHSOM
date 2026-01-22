@@ -154,32 +154,52 @@ def capture_latent(model, loader, device):
     model.eval()
     labels_vector = []
     latent_vectors = []
+    cls_vectors = []
 
     with torch.no_grad():
         for images, labels in loader:
             images = images.to(device)
+            
             _, latent = model(images)
-            latent = latent[:,0,:]
+            cls_token = latent[:, 0, :]
+            latent = latent[:,1:,:]
+            
+            # (Batch, 49, 16) -> (Batch, 784)
+            latent = latent.reshape(latent.shape[0], -1)
+            
+            cls_vectors.append(cls_token.cpu().numpy())
             latent_vectors.append(latent.cpu().numpy())
             labels_vector.append(labels.cpu().numpy())
 
-    X = np.concatenate(latent_vectors, axis=0)
+    X_patches = np.concatenate(latent_vectors, axis=0)
+    X_cls = np.concatenate(cls_vectors, axis=0)
     y = np.concatenate(labels_vector, axis=0)
 
     model.train()
 
-    output = (X,y)
-    return output
+    return X_patches, X_cls, y
 
 
-def plot_umap(snapshot):
-    for epoch, (X,y) in snapshot.items():
+def plot_umap_patches(snapshot):
+    for epoch, (patches,y) in snapshot.items():
 
         reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='cosine', random_state=42)
-        embedding = reducer.fit_transform(X)
+        embedding = reducer.fit_transform(patches)
 
         plt.figure(figsize=(10, 8))
         scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=y, cmap='tab10')
         plt.colorbar(scatter, ticks=range(10), label='Digit Class')
-        plt.title(f"UMAP, epoch: {epoch}")
+        plt.title(f"UMAP patches, epoch: {epoch}")
+        plt.show()
+
+def plot_umap_cls(snapshot):
+    for epoch, (cls, y) in snapshot.items():
+
+        reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='cosine', random_state=42)
+        embedding = reducer.fit_transform(cls)
+
+        plt.figure(figsize=(10, 8))
+        scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=y, cmap='tab10')
+        plt.colorbar(scatter, ticks=range(10), label='Digit Class')
+        plt.title(f"UMAP CLS token, epoch: {epoch}")
         plt.show()
