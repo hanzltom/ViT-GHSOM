@@ -46,8 +46,7 @@ class ViTSOMLoss(nn.Module):
     def forward(self, original_img, reconstructed, latent_vectors, som_weights, grid_coords, sigma, current_lamda):
         l_nn = self.mseLoss(original_img, reconstructed)
 
-        # latent vector shape: (batch, sequence of patches + cls, embed_dim), sequence of patches not needed for som
-        #som_input = latent_vectors[:,0,:]
+        # latent vector shape: (batch, sequence of patches + cls, embed_dim), cls not needed for SOM, only patches
         patches = latent_vectors[:, 1:, :] 
         
         som_input = patches.reshape(patches.shape[0], -1)

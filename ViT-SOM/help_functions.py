@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from sklearn import metrics
 import umap
 import matplotlib.pyplot as plt
+import copy
 
 """
 Distance functions
@@ -203,3 +204,55 @@ def plot_umap_cls(snapshot):
         plt.colorbar(scatter, ticks=range(10), label='Digit Class')
         plt.title(f"UMAP CLS token, epoch: {epoch}")
         plt.show()
+
+
+def get_node_labels(model, loader, device):
+    rows, cols = model.get_som_shape()
+    num_nodes = rows * cols
+
+    node_hits = np.zeros((num_nodes, 10))
+
+    for images, labels in loader:
+        images = images.to(device)
+        labels = labels.cpu().numpy()
+
+        _, latent = model(images)
+        patches = latent[:, 1:, :]
+        som_input = patches.reshape(patches.shape[0], -1)
+
+        # find bmu for batch
+        dists = cosine_distance_torch(model.get_som_weights(), som_input)
+        bmu_indices = torch.argmin(dists, dim=1).cpu().numpy()
+
+        # add vote to neuron
+        for i, bmu_idx in enumerate(bmu_indices):
+            node_hits[bmu_idx, labels[i]] += 1
+
+    # get label with max votes
+    node_labels = np.argmax(node_hits, axis=1)
+
+    # units with no votes
+    total_hits = np.sum(node_hits, axis=1)
+    node_labels[total_hits == 0] = -1
+
+    return node_labels
+
+def plot_umap_som_weights(snapshot_som_weights):
+    for epoch, (weights, labels) in snapshot_som_weights.items():
+        reducer = umap.UMAP(n_neighbors=20, min_dist=0.1, metric='cosine', random_state=42)
+        embedding = reducer.fit_transform(weights)
+        active_mask = labels != -1
+
+        plt.figure(figsize=(10, 8))
+        if np.sum(active_mask) > 0:
+            scatter = plt.scatter(embedding[active_mask, 0], embedding[active_mask, 1],
+                                  c=labels[active_mask], cmap='tab10')
+            plt.colorbar(scatter, ticks=range(10), label='Digit Class')
+
+        if np.sum(~active_mask) > 0:
+            plt.scatter(embedding[~active_mask, 0], embedding[~active_mask, 1],
+                        c='black', label='Dead Units')
+
+        plt.title(f"SOM wights, epoch {epoch}")
+        plt.show()
+
