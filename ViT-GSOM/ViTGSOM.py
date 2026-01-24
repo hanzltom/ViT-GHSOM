@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
 from help_functions import *
@@ -252,8 +253,28 @@ class AutoEncoder(nn.Module):
     def get_som_weights(self):
         return self.som_weights
 
-    def find_dissimilar_neighbour(self, e_index):
-        pass
+    def get_weight_of_node(self, flat_idx):
+        return self.som_weights[flat_idx]
+
+    def find_dissimilar_neighbour(self, e_index, e_index_flat):
+        e_weight = self.get_weight_of_node(e_index_flat)
+        r, c = e_index
+        max_dist = 0
+        d_idx = None
+
+        coords_neighbours = [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+        for rn, cn in coords_neighbours:
+            if 0 <= cn < self.current_col_num and 0 <= rn < self.current_row_num:
+                # calculate flat index to get the weight
+                flat_idx_n = rn * self.current_col_num + cn
+                neighbor_weight = self.get_weight_of_node(flat_idx_n)
+
+                dist = F.cosine_similarity(e_weight, neighbor_weight, dim=0)
+                if dist > max_dist:
+                    max_dist = dist
+                    d_idx = (rn, cn)
+
+        return d_idx
 
     def add_col_between(self, col1, col2):
         pass
@@ -262,10 +283,10 @@ class AutoEncoder(nn.Module):
         pass
 
     def grow(self, unit_error_matrix):
-        max_index_flat = np.argmax(unit_error_matrix)
-        e_index = np.unravel_index(max_index_flat, unit_error_matrix.shape)
+        e_index_flat = np.argmax(unit_error_matrix)
+        e_index = np.unravel_index(e_index_flat, unit_error_matrix.shape)
 
-        d_index = self.find_dissimilar_neighbour(e_index)
+        d_index = self.find_dissimilar_neighbour(e_index, e_index_flat)
 
         if d_index is None:
             print(f"---------------------No neighbour found for {e_index}---------------")
@@ -309,7 +330,7 @@ class AutoEncoder(nn.Module):
 
             # if multiple images in same batch hit same neuron, value is added only ones, therefore have to use np.add.at
             #unit_errors[row_indices, col_indices] += min_dists
-            np.add.at(unit_hits, (row_indices, col_indices), min_dists)
+            np.add.at(unit_errors, (row_indices, col_indices), min_dists)
             #unit_hits[row_indices, col_indices] += 1
             np.add.at(unit_hits, (row_indices, col_indices), 1)
 
@@ -328,7 +349,8 @@ class AutoEncoder(nn.Module):
         output = False
 
         if global_mqe > self.grow_threshold:
-            self.grow()
+            print(f"MQE {global_mqe:.4f} > Threshold {self.grow_threshold}. Growing")
+            self.grow(unit_errors)
             self.to(device)
             output = True
 
