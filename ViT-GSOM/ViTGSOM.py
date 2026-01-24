@@ -220,7 +220,8 @@ class ViTDecoder(nn.Module):
 
 class AutoEncoder(nn.Module):
     def __init__(self, img_size=28, patch_size=4, num_of_channels=1, embed_dim=16, enc_depth=4,
-                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 5, som_cols = 5, grow_threshold = 0.5):
+                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 2, som_cols = 2,
+                 spread_factor = 0.5):
         super().__init__()
 
         assert img_size % patch_size == 0, f"Image size ({img_size}) must be divisible by patch size ({patch_size})."
@@ -234,7 +235,8 @@ class AutoEncoder(nn.Module):
 
         self.current_row_num = som_rows
         self.current_col_num = som_cols
-        self.grow_threshold = grow_threshold
+        self.spread_factor = spread_factor
+        self.grow_threshold = self.calculate_mqe0()
         self.som_dim = self.num_of_patches * embed_dim
         self.som_weights = nn.Parameter(torch.randn(self.current_row_num * self.current_col_num, self.som_dim))
 
@@ -256,6 +258,9 @@ class AutoEncoder(nn.Module):
     def get_weight_of_node(self, flat_idx):
         return self.som_weights[flat_idx]
 
+    def calculate_mqe0(self):
+        pass
+
     def find_dissimilar_neighbour(self, e_index, e_index_flat):
         e_weight = self.get_weight_of_node(e_index_flat)
         r, c = e_index
@@ -265,7 +270,7 @@ class AutoEncoder(nn.Module):
         coords_neighbours = [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
         for rn, cn in coords_neighbours:
             if 0 <= cn < self.current_col_num and 0 <= rn < self.current_row_num:
-                # calculate flat index to get the weight
+                # calculate flat index of neighbour to get the weight
                 flat_idx_n = rn * self.current_col_num + cn
                 neighbor_weight = self.get_weight_of_node(flat_idx_n)
 
@@ -277,10 +282,41 @@ class AutoEncoder(nn.Module):
         return d_idx
 
     def add_col_between(self, col1, col2):
-        pass
+        flat_weights = self.som_weights.data
+        grid_weights = flat_weights.view(self.current_row_num, self.current_col_num, self.som_dim)
+
+        insert_idx = max(col1, col2)
+
+        # calculate the weights of new column as a mean of neighbours
+        col_left = grid_weights[:, col1:col1+1, :]
+        col_right = grid_weights[:, col2:col2+1, :]
+        new_col = (col_left + col_right) / 2
+
+        part_left = grid_weights[:, :insert_idx, :]
+        part_right = grid_weights[:, insert_idx:, :]
+        new_grid = torch.cat([part_left, new_col, part_right], dim=1)
+
+        self.current_col_num += 1
+        self.som_weights = nn.Parameter(new_grid.reshape(-1, self.som_dim))
+
 
     def add_row_between(self, row1, row2):
-        pass
+        flat_weights = self.som_weights.data
+        grid_weights = flat_weights.view(self.current_row_num, self.current_col_num, self.som_dim)
+
+        insert_idx = max(row1, row2)
+
+        # calculate the weights of new row as a mean of neighbours
+        row_top = grid_weights[row1:row1+1, :, :]
+        row_bottom = grid_weights[row2:row2+1, :, :]
+        new_row = (row_top + row_bottom) / 2
+
+        part_top = grid_weights[:insert_idx, :, :]
+        part_bottom = grid_weights[insert_idx:, :, :]
+        new_grid = torch.cat([part_top, new_row, part_bottom], dim=0)
+
+        self.current_row_num += 1
+        self.som_weights = nn.Parameter(new_grid.reshape(-1, self.som_dim))
 
     def grow(self, unit_error_matrix):
         e_index_flat = np.argmax(unit_error_matrix)
@@ -348,7 +384,7 @@ class AutoEncoder(nn.Module):
         unit_errors, global_mqe = self.calculate_unit_errors(loader, device)
         output = False
 
-        if global_mqe > self.grow_threshold:
+        if global_mqe > self.spread_factor * self.grow_threshold:
             print(f"MQE {global_mqe:.4f} > Threshold {self.grow_threshold}. Growing")
             self.grow(unit_errors)
             self.to(device)
