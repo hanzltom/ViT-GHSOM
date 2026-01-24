@@ -246,10 +246,10 @@ class AutoEncoder(nn.Module):
         return output, latent
 
     def get_sigma(self):
-        return np.ceil(min(self.som_rows, self.som_cols) / 2)
+        return np.ceil(min(self.current_row_num, self.current_col_num) / 2)
 
     def get_som_shape(self):
-        return self.som_rows, self.som_cols
+        return self.current_row_num, self.current_col_num
 
     def get_som_weights(self):
         return self.som_weights
