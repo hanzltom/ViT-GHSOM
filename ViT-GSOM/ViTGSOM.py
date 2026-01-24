@@ -218,8 +218,8 @@ class ViTDecoder(nn.Module):
         return x
 
 class AutoEncoder(nn.Module):
-    def __init__(self, img_size=28, patch_size=4, num_of_channels=1,
-                 embed_dim=16, enc_depth=4, dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 5, som_cols = 5):
+    def __init__(self, img_size=28, patch_size=4, num_of_channels=1, embed_dim=16, enc_depth=4,
+                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 5, som_cols = 5, grow_threshold = 0.5):
         super().__init__()
 
         assert img_size % patch_size == 0, f"Image size ({img_size}) must be divisible by patch size ({patch_size})."
@@ -233,6 +233,7 @@ class AutoEncoder(nn.Module):
 
         self.current_row_num = som_rows
         self.current_col_num = som_cols
+        self.grow_threshold = grow_threshold
         self.som_dim = self.num_of_patches * embed_dim
         self.som_weights = nn.Parameter(torch.randn(self.current_row_num * self.current_col_num, self.som_dim))
 
@@ -251,8 +252,34 @@ class AutoEncoder(nn.Module):
     def get_som_weights(self):
         return self.som_weights
 
-    def grow(self):
+    def find_dissimilar_neighbour(self, e_index):
         pass
+
+    def add_col_between(self, col1, col2):
+        pass
+
+    def add_row_between(self, row1, row2):
+        pass
+
+    def grow(self, unit_error_matrix):
+        max_index_flat = np.argmax(unit_error_matrix)
+        e_index = np.unravel_index(max_index_flat, unit_error_matrix.shape)
+
+        d_index = self.find_dissimilar_neighbour(e_index)
+
+        if d_index is None:
+            print(f"---------------------No neighbour found for {e_index}---------------")
+            return
+
+        er, ec = e_index
+        dr, dc = d_index
+
+        if er == dr:  # same row
+            self.add_col_between(ec, dc)
+        elif ec == dc:  # same col
+            self.add_row_between(er, dr)
+        else:
+            raise ValueError("e_unit and d_unit not adjacent")
 
     def calculate_unit_errors(self, loader, device):
 
@@ -294,3 +321,16 @@ class AutoEncoder(nn.Module):
         global_mqe = total_error / active_units_count if active_units_count > 0 else 0
 
         return unit_errors, global_mqe
+
+    def check_growth(self, loader, device):
+        self.eval()
+        unit_errors, global_mqe = self.calculate_unit_errors(loader, device)
+        output = False
+
+        if global_mqe > self.grow_threshold:
+            self.grow()
+            self.to(device)
+            output = True
+
+        self.train()
+        return output
