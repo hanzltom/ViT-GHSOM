@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from help_functions import *
+from help_functions import cosine_distance_torch, gaussian_neighbourhood_torch
 
 
 """
@@ -292,7 +292,7 @@ class AutoEncoder(nn.Module):
     def find_dissimilar_neighbour(self, e_index, e_index_flat):
         e_weight = self.get_weight_of_node(e_index_flat)
         r, c = e_index
-        max_dist = 0
+        max_dist = -1.0
         d_idx = None
 
         coords_neighbours = [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
@@ -302,7 +302,7 @@ class AutoEncoder(nn.Module):
                 flat_idx_n = rn * self.current_col_num + cn
                 neighbor_weight = self.get_weight_of_node(flat_idx_n)
 
-                dist = F.cosine_similarity(e_weight, neighbor_weight, dim=0)
+                dist = 1 - F.cosine_similarity(e_weight, neighbor_weight, dim=0)
                 if dist > max_dist:
                     max_dist = dist
                     d_idx = (rn, cn)
@@ -416,8 +416,9 @@ class AutoEncoder(nn.Module):
         unit_errors, global_mqe = self.calculate_unit_errors(loader, device)
         output = False
 
-        if global_mqe > self.spread_factor * self.grow_threshold:
-            print(f"MQE {global_mqe:.4f} > Threshold {self.grow_threshold}. Growing")
+        growth_threshold = self.spread_factor * self.mqe0
+        if global_mqe > growth_threshold:
+            print(f"MQE {global_mqe:.4f} > Threshold {growth_threshold}. Growing")
             self.grow(unit_errors)
             self.to(device)
             output = True
