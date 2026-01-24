@@ -220,8 +220,7 @@ class ViTDecoder(nn.Module):
 
 class AutoEncoder(nn.Module):
     def __init__(self, img_size=28, patch_size=4, num_of_channels=1, embed_dim=16, enc_depth=4,
-                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 2, som_cols = 2,
-                 spread_factor = 0.5):
+                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 2, som_cols = 2, spread_factor = 0.5):
         super().__init__()
 
         assert img_size % patch_size == 0, f"Image size ({img_size}) must be divisible by patch size ({patch_size})."
@@ -236,7 +235,7 @@ class AutoEncoder(nn.Module):
         self.current_row_num = som_rows
         self.current_col_num = som_cols
         self.spread_factor = spread_factor
-        self.grow_threshold = self.calculate_mqe0()
+        self.mqe0 = None
         self.som_dim = self.num_of_patches * embed_dim
         self.som_weights = nn.Parameter(torch.randn(self.current_row_num * self.current_col_num, self.som_dim))
 
@@ -258,8 +257,37 @@ class AutoEncoder(nn.Module):
     def get_weight_of_node(self, flat_idx):
         return self.som_weights[flat_idx]
 
-    def calculate_mqe0(self):
-        pass
+    def calculate_mqe0(self, loader, device):
+        self.eval()
+        all_latent = []
+
+        with torch.no_grad():
+            for images, labels in loader:
+                images = images.to(device)
+
+                _, latent = self.encoder(images)
+                patches = latent[:, 1:, :]
+                # (batch, 784)
+                flat_latent = patches.reshape(patches.shape[0], -1)
+                all_latent.append(flat_latent.cpu())
+
+        # (n_samples, 784)
+        data_latent = torch.cat(all_latent, dim=0)
+        # centroid as a mean of latent, shape (1,784)
+        centroid_latent = torch.mean(data_latent, dim=0, keepdim=True)
+
+        data_latent = data_latent.to(device)
+        centroid_latent = centroid_latent.to(device)
+
+        # mqe0 as distance from all latent to centroid latent - latent variance
+        dists = self.cosine_distance_torch(centroid_latent, data_latent)
+        mqe0 = torch.mean(dists).item()
+
+        print(f"Latent variance (mqe0): {mqe0}")
+        print(f"Spread Factor: {self.spread_factor}")
+        print(f"Threshold, mqe0 * spread_factor: {mqe0 * self.spread_factor}")
+        return mqe0
+
 
     def find_dissimilar_neighbour(self, e_index, e_index_flat):
         e_weight = self.get_weight_of_node(e_index_flat)
@@ -343,32 +371,33 @@ class AutoEncoder(nn.Module):
         unit_errors = np.zeros((self.current_row_num, self.current_col_num))
         unit_hits = np.zeros((self.current_row_num, self.current_col_num))
 
-        for images, labels in loader:
-            images = images.to(device)
+        with torch.no_grad():
+            for images, labels in loader:
+                images = images.to(device)
 
-            _, latent = self.encoder(images)
-            patches = latent[:, 1:, :]
-            som_input = patches.reshape(patches.shape[0], -1)
+                _, latent = self.encoder(images)
+                patches = latent[:, 1:, :]
+                som_input = patches.reshape(patches.shape[0], -1)
 
-            # find bmu for batch
-            dists = cosine_distance_torch(self.get_som_weights(), som_input)
+                # find bmu for batch
+                dists = cosine_distance_torch(self.get_som_weights(), som_input)
 
-            # get min distance and flat index in the batch
-            # min_dists: minimal error value for each image
-            # flat_indices: flatted indices of winning node (0,n-1)
-            min_dists, flat_indices = torch.min(dists, dim=1)
-            min_dists = min_dists.cpu().numpy()
-            flat_indices = flat_indices.cpu().numpy()
+                # get min distance and flat index in the batch
+                # min_dists: minimal error value for each image
+                # flat_indices: flatted indices of winning node (0,n-1)
+                min_dists, flat_indices = torch.min(dists, dim=1)
+                min_dists = min_dists.cpu().numpy()
+                flat_indices = flat_indices.cpu().numpy()
 
-            # e.g. flat index 7 in 5 col grid -> row 1, col 2
-            row_indices = flat_indices // self.current_col_num
-            col_indices = flat_indices % self.current_col_num
+                # e.g. flat index 7 in 5 col grid -> row 1, col 2
+                row_indices = flat_indices // self.current_col_num
+                col_indices = flat_indices % self.current_col_num
 
-            # if multiple images in same batch hit same neuron, value is added only ones, therefore have to use np.add.at
-            #unit_errors[row_indices, col_indices] += min_dists
-            np.add.at(unit_errors, (row_indices, col_indices), min_dists)
-            #unit_hits[row_indices, col_indices] += 1
-            np.add.at(unit_hits, (row_indices, col_indices), 1)
+                # if multiple images in same batch hit same neuron, value is added only ones, therefore have to use np.add.at
+                #unit_errors[row_indices, col_indices] += min_dists
+                np.add.at(unit_errors, (row_indices, col_indices), min_dists)
+                #unit_hits[row_indices, col_indices] += 1
+                np.add.at(unit_hits, (row_indices, col_indices), 1)
 
         unit_hits_mask = unit_hits > 0
         active_units_count = np.sum(unit_hits_mask)
@@ -380,6 +409,9 @@ class AutoEncoder(nn.Module):
         return unit_errors, global_mqe
 
     def check_growth(self, loader, device):
+        if self.mqe0 is None:
+            self.mqe0 = self.calculate_mqe0(loader, device)
+
         self.eval()
         unit_errors, global_mqe = self.calculate_unit_errors(loader, device)
         output = False
