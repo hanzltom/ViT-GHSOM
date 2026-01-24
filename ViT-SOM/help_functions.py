@@ -250,9 +250,8 @@ def plot_umap_som_weights(snapshot_som_weights):
             plt.colorbar(scatter, ticks=range(10), label='Digit Class')
 
         if np.sum(~active_mask) > 0:
-            plt.scatter(embedding[~active_mask, 0], embedding[~active_mask, 1],
-                        c='black', label='Dead Units')
+            plt.scatter(embedding[~active_mask, 0], embedding[~active_mask, 1], c='black')
 
-        plt.title(f"SOM wights, epoch {epoch}")
+        plt.title(f"SOM weights, epoch {epoch}")
         plt.show()
 
