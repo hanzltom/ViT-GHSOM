@@ -420,6 +420,7 @@ class AutoEncoder(nn.Module):
         if global_mqe > growth_threshold:
             print(f"MQE {global_mqe:.4f} > Threshold {growth_threshold}. Growing")
             self.grow(unit_errors)
+            print(f"Current grid size: ({self.current_row_num}, {self.current_col_num})")
             self.to(device)
             output = True
 
