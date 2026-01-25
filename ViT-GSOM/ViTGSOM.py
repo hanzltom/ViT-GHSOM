@@ -265,7 +265,7 @@ class AutoEncoder(nn.Module):
             for images, labels in loader:
                 images = images.to(device)
 
-                _, latent = self.encoder(images)
+                latent = self.encoder(images)
                 patches = latent[:, 1:, :]
                 # (batch, 784)
                 flat_latent = patches.reshape(patches.shape[0], -1)
@@ -280,7 +280,7 @@ class AutoEncoder(nn.Module):
         centroid_latent = centroid_latent.to(device)
 
         # mqe0 as distance from all latent to centroid latent - latent variance
-        dists = self.cosine_distance_torch(centroid_latent, data_latent)
+        dists = cosine_distance_torch(centroid_latent, data_latent)
         mqe0 = torch.mean(dists).item()
 
         print(f"Latent variance (mqe0): {mqe0}")
@@ -371,11 +371,14 @@ class AutoEncoder(nn.Module):
         unit_errors = np.zeros((self.current_row_num, self.current_col_num))
         unit_hits = np.zeros((self.current_row_num, self.current_col_num))
 
+        total_samples = 0
+
         with torch.no_grad():
             for images, labels in loader:
                 images = images.to(device)
+                total_samples += images.shape[0]
 
-                _, latent = self.encoder(images)
+                latent = self.encoder(images)
                 patches = latent[:, 1:, :]
                 som_input = patches.reshape(patches.shape[0], -1)
 
@@ -402,9 +405,12 @@ class AutoEncoder(nn.Module):
         unit_hits_mask = unit_hits > 0
         active_units_count = np.sum(unit_hits_mask)
 
-        # Global MQE = Total Error / number of active units in the GSOM
+        # new Global MQE = Total Error / number of samples in dataset
+        # old Global MQE = Total Error / number of active units in the GSOM
+        # ----------------------------------- Different from the papers, needed to state in thesis ------------------------------
         total_error = np.sum(unit_errors)
-        global_mqe = total_error / active_units_count if active_units_count > 0 else 0
+        global_mqe = total_error / total_samples if total_samples > 0 else 0
+        #global_mqe = total_error / active_units_count if active_units_count > 0 else 0
 
         return unit_errors, global_mqe
 
@@ -418,11 +424,13 @@ class AutoEncoder(nn.Module):
 
         growth_threshold = self.spread_factor * self.mqe0
         if global_mqe > growth_threshold:
-            print(f"MQE {global_mqe:.4f} > Threshold {growth_threshold}. Growing")
+            print(f"MQE {global_mqe} > Threshold {growth_threshold}. Growing")
             self.grow(unit_errors)
             print(f"Current grid size: ({self.current_row_num}, {self.current_col_num})")
             self.to(device)
             output = True
+        else:
+            print(f"MQE {global_mqe} < Threshold {growth_threshold}. Not needed to expand")
 
         self.train()
         return output
