@@ -118,12 +118,12 @@ def generate_label_matrix_vid(db, y):
 
     fig, ax = plt.subplots(figsize=(8, 8))
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
-    cmap = colors.ListedColormap(color_options[:len(y_unique)])
+    cmap = colors.ListedColormap(color_options[:len(y_unique) % len(color_options)])
 
     im = ax.imshow(db[0], cmap=cmap)
 
     patches = [mpatches.Patch(color=color_options[i], label=label) for i, label in enumerate(y_unique)]
-    patches.append(mpatches.Patch(color='lightgrey', label='Empty'))
+    patches.append(mpatches.Patch(color='tab:grey', label='Empty'))
     ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
 
