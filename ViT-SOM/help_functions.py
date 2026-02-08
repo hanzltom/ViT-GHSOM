@@ -116,12 +116,17 @@ torch.arange(row_num, dtype=torch.float32),
     coords = torch.stack((x_coords, y_coords), dim=-1).reshape(-1, 2)
     return coords.to(device)
 
-def calculate_purity(model, loader, device):
+def calculate_QE_TE_Purity(model, loader, device):
 # https://stackoverflow.com/questions/34047540/python-clustering-purity-metric
     model.eval()
     true_label = []
     cluster_labels = []
+    total_qe = 0.0
+    total_te = 0.0
+    total_samples = 0
 
+    rows, cols = model.get_som_shape()
+    grid_coords = get_grid_coords(rows, cols, device)
     with torch.no_grad():
         for images, labels in loader:
             images = images.to(device)
@@ -139,16 +144,38 @@ def calculate_purity(model, loader, device):
 
             # calculate distance, shape (batch, neuron unit num)
             dists = cosine_distance_torch(model.get_som_weights(), som_input)
+            min_dists, bmu_indices = torch.min(dists, dim=1)
 
-            bmu_indices = torch.argmin(dists, dim=1)
-            true_label.append(labels)
-            cluster_labels.append(bmu_indices)
+            # QE
+            total_qe += torch.sum(min_dists).item()
+
+            # TE
+            _, top2_indices = torch.topk(dists, k=2, dim=1, largest=False)
+            bmu1_idx = top2_indices[:, 0]
+            bmu2_idx = top2_indices[:, 1]
+
+            bmu1_coords = grid_coords[bmu1_idx]
+            bmu2_coords = grid_coords[bmu2_idx]
+
+            grid_dists = torch.cdist(bmu1_coords, bmu2_coords)
+            total_te += torch.sum(grid_dists > np.sqrt(2)).item()
+
+            # Purity
+            true_label.append(labels.cpu())
+            cluster_labels.append(bmu_indices.cpu())
+
+            total_samples += dists.shape[0]
+
+    output = {}
+    output["QE"] = total_qe / total_samples if total_samples > 0 else 0
+    output["TE"] = total_te / total_samples if total_samples > 0 else 0
 
     true_labels_np = torch.cat(true_label).cpu().numpy()
     cluster_labels_np = torch.cat(cluster_labels).cpu().numpy()
-    
     contingency_matrix = metrics.cluster.contingency_matrix(true_labels_np, cluster_labels_np)
-    return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
+    output["Purity"] =  np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
+
+    return output
 
 
 def capture_latent(model, loader, device):
