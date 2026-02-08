@@ -18,6 +18,8 @@ class GHSOM:
         self.use_qe_for_vertical = use_qe_for_vertical
         self.min_samples_vertical_grow = min_samples_vertical_grow
         self.max_gsom_size = max_gsom_size
+        self.QE = 0
+        self.TE = 0
 
         self.layer0_weight = None
         self.global_stopping_criterion = 0 # vertical growth
@@ -101,6 +103,10 @@ class GHSOM:
             self.gsom_db[map_id] = current_gsom
 
             self.check_and_expand(current_gsom, current_data, map_id, queue)
+
+        print("Training finished!")
+        self.calculate_global_QE_and_TE(data)
+        print(f"QE: {self.QE}, TE: {self.TE}")
 
     def map_data_to_units(self, gsom_instance, data):
         mapping = {}
@@ -221,15 +227,23 @@ class GHSOM:
 
         return hierarchy_labels
 
-    def calculate_global_qe(self, X):
+    def calculate_global_QE_and_TE(self, X):
         queue = deque([(self.gsom_db["1"], X, "1")])
 
-        total_global_qe = 0
+        total_global_qe = 0.0
+        total_weighted_te = 0.0
+        total_samples_processed = 0
 
         while queue:
             curr_gsom, curr_X, curr_map_id = queue.popleft()
 
-            if len(curr_X) == 0: continue
+            if len(curr_X) == 0:
+                continue
+            elif len(curr_X) > 2:
+                map_te = curr_gsom.calculate_TE(curr_X)
+                num_samples = curr_X.shape[0]
+                total_weighted_te += map_te * num_samples
+                total_samples_processed += num_samples
 
             mapping = self.map_data_to_units(curr_gsom, curr_X)
             for r in range(curr_gsom.current_row_num):
@@ -252,5 +266,8 @@ class GHSOM:
                         dists = self.calculate_distance_func(weight_of_leaf, samples_on_unit, 1)
                         total_global_qe += np.sum(dists)
 
-        return total_global_qe / X.shape[0]
+        self.QE = total_global_qe / X.shape[0] if X.shape[0] > 0 else 0
+        self.TE = total_weighted_te / total_samples_processed if total_samples_processed > 0 else 0
+
+
 

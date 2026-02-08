@@ -180,3 +180,27 @@ class GSOM:
                 if self.current_row_num >= self.max_gsom_size or self.current_col_num >= self.max_gsom_size:
                     print("Max GSOM size reached.")
                     break
+
+    def find_top2_BMUs(self, input_vector):
+        # https://gist.github.com/EdisonLeeeee/df5a2427f902312bbd29151f79e728ab
+        dists = self.calculate_distance_func(self.weights, input_vector, 2)
+        dists_flat = dists.flatten()
+
+        indices_flat = np.argpartition(dists_flat, 2)[:2]
+
+        row1, col1 = np.unravel_index(indices_flat[0], dists.shape)
+        row2, col2 = np.unravel_index(indices_flat[1], dists.shape)
+
+        return np.array((row1, col1)), np.array((row2, col2))
+
+    def calculate_TE(self, data):
+        error_count = 0
+        num_samples = data.shape[0]
+
+        for sample in data:
+            idx1, idx2 = self.find_top2_BMUs(sample)
+
+            if euclidean_distance(idx1, idx2, None) > np.sqrt(2):
+                error_count += 1
+
+        return error_count / num_samples
