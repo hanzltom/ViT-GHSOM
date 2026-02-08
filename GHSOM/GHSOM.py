@@ -1,5 +1,5 @@
 import numpy as np
-
+from sklearn import metrics
 from help_functions import *
 from GSOM import GSOM
 from collections import deque
@@ -18,8 +18,9 @@ class GHSOM:
         self.use_qe_for_vertical = use_qe_for_vertical
         self.min_samples_vertical_grow = min_samples_vertical_grow
         self.max_gsom_size = max_gsom_size
-        self.QE = 0
-        self.TE = 0
+        self.QE = 0.0
+        self.TE = 0.0
+        self.purity = 0.0
 
         self.layer0_weight = None
         self.global_stopping_criterion = 0 # vertical growth
@@ -74,7 +75,7 @@ class GHSOM:
 
         return reference_val
 
-    def train(self, data):
+    def train(self, data, y_int):
         layer0_val = self.initialize_layer0(data)
 
         root_gsom = GSOM(
@@ -105,7 +106,7 @@ class GHSOM:
             self.check_and_expand(current_gsom, current_data, map_id, queue)
 
         print("Training finished!")
-        self.calculate_global_QE_and_TE(data)
+        self.calculate_QE_TE_Purity(data, y_int)
         print(f"QE: {self.QE}, TE: {self.TE}")
 
     def map_data_to_units(self, gsom_instance, data):
@@ -227,15 +228,17 @@ class GHSOM:
 
         return hierarchy_labels
 
-    def calculate_global_QE_and_TE(self, X):
-        queue = deque([(self.gsom_db["1"], X, "1")])
+    def calculate_QE_TE_Purity(self, X, y_int):
+        queue = deque([(self.gsom_db["1"], X, y_int, "1")])
 
         total_global_qe = 0.0
         total_weighted_te = 0.0
         total_samples_processed = 0
+        true_labels = []
+        cluster_labels = []
 
         while queue:
-            curr_gsom, curr_X, curr_map_id = queue.popleft()
+            curr_gsom, curr_X, curr_y, curr_map_id = queue.popleft()
 
             if len(curr_X) == 0:
                 continue
@@ -245,29 +248,36 @@ class GHSOM:
                 total_weighted_te += map_te * num_samples
                 total_samples_processed += num_samples
 
-            mapping = self.map_data_to_units(curr_gsom, curr_X)
+            mapping = self.map_data_with_labels_to_units(curr_gsom, curr_X, curr_y)
             for r in range(curr_gsom.current_row_num):
                 for c in range(curr_gsom.current_col_num):
                     unit_id = f"{curr_map_id}_{r}-{c}"
 
-                    samples_list = mapping.get((r, c))
+                    unit_data = mapping.get((r, c))
 
-                    if samples_list is None or len(samples_list) == 0:
+                    if unit_data is None or len(unit_data[0]) == 0:
                         continue
 
-                    samples_on_unit = np.array(samples_list)
+                    subset_X, subset_y = unit_data
+                    subset_X = np.array(subset_X)
 
                     if unit_id in self.gsom_db.keys():
-                        queue.append((self.gsom_db[unit_id], samples_on_unit, unit_id))
+                        queue.append((self.gsom_db[unit_id], subset_X, subset_y, unit_id))
                     else:
                         weight_of_leaf = curr_gsom.get_weight_of_node((r,c))
 
                         # broadcasting weight x array of samples
-                        dists = self.calculate_distance_func(weight_of_leaf, samples_on_unit, 1)
+                        dists = self.calculate_distance_func(weight_of_leaf, subset_X, 1)
                         total_global_qe += np.sum(dists)
+
+                        true_labels.extend(subset_y)
+                        # add cluter label for every sample in this leaf node
+                        cluster_labels.extend([unit_id] * len(subset_y))
 
         self.QE = total_global_qe / X.shape[0] if X.shape[0] > 0 else 0
         self.TE = total_weighted_te / total_samples_processed if total_samples_processed > 0 else 0
+        contingency_matrix = metrics.cluster.contingency_matrix(true_labels, cluster_labels)
+        self.purity =  np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
 
 
 
