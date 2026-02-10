@@ -16,9 +16,14 @@ class SomLoss(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, input_vectors, som_weights, grid_coords, sigma):
+    def forward(self, latent_vectors, som_weights, grid_coords, sigma):
+        # latent vector shape: (batch, sequence of patches + cls, embed_dim), cls not needed for SOM, only patches
+        patches = latent_vectors[:, 1:, :]
+
+        som_input = patches.reshape(patches.shape[0], -1)
+
         # distance for all samples in batch, shape (batch, Num_Units)
-        dists = cosine_distance_torch(som_weights, input_vectors)
+        dists = cosine_distance_torch(som_weights, som_input)
 
         # indices of bmu for each sample in batch, size (batch,)
         bmu_indices = torch.argmin(dists, dim=1)
@@ -37,23 +42,16 @@ class SomLoss(nn.Module):
         loss = neighbourhood_influence * dists
         return loss.sum(dim=1).mean() # Equation 3
 
-class ViTSOMLoss(nn.Module):
+class ViTLoss(nn.Module):
     def __init__(self):
         super().__init__()
         
         self.mseLoss = nn.MSELoss()
-        self.somLoss = SomLoss()
 
-    def forward(self, original_img, reconstructed, latent_vectors, som_weights, grid_coords, sigma, current_lamda):
+    def forward(self, original_img, reconstructed):
         l_nn = self.mseLoss(original_img, reconstructed)
 
-        # latent vector shape: (batch, sequence of patches + cls, embed_dim), cls not needed for SOM, only patches
-        patches = latent_vectors[:, 1:, :] 
-        
-        som_input = patches.reshape(patches.shape[0], -1)
-        l_som = self.somLoss(som_input, som_weights, grid_coords, sigma)
-        l_total = (current_lamda * l_som) + l_nn
-        return l_total, l_nn, l_som        # Eq. 6
+        return l_nn
 
 
 def unpatch(x, patch_size=4, channels=1):
