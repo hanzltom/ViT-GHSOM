@@ -218,7 +218,7 @@ class ViTDecoder(nn.Module):
 
 class AutoEncoder(nn.Module):
     def __init__(self, img_size=28, patch_size=4, num_of_channels=1, embed_dim=16, enc_depth=4,
-                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 2, som_cols = 2, spread_factor = 0.5):
+                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 2, som_cols = 2):
         super().__init__()
 
         assert img_size % patch_size == 0, f"Image size ({img_size}) must be divisible by patch size ({patch_size})."
@@ -232,8 +232,7 @@ class AutoEncoder(nn.Module):
 
         self.current_row_num = som_rows
         self.current_col_num = som_cols
-        self.spread_factor = spread_factor
-        self.mqe0 = None
+        self.som_loss_history = []
         self.som_dim = self.num_of_patches * embed_dim
         self.som_weights = nn.Parameter(torch.randn(self.current_row_num * self.current_col_num, self.som_dim))
 
@@ -254,6 +253,9 @@ class AutoEncoder(nn.Module):
 
     def get_weight_of_node(self, flat_idx):
         return self.som_weights[flat_idx]
+
+    def save_som_loss(self, som_loss):
+        self.som_loss_history.append(som_loss)
 
     def calculate_mqe0(self, loader, device):
         self.eval()
@@ -412,23 +414,19 @@ class AutoEncoder(nn.Module):
 
         return unit_errors, global_mqe
 
-    def check_growth(self, loader, device):
-        if self.mqe0 is None:
-            self.mqe0 = self.calculate_mqe0(loader, device)
+    def check_growth(self, loader, device, epoch_num):
 
         self.eval()
         unit_errors, global_mqe = self.calculate_unit_errors(loader, device)
         output = False
 
-        growth_threshold = self.spread_factor * self.mqe0
-        if global_mqe > growth_threshold:
-            print(f"MQE {global_mqe} > Threshold {growth_threshold}. Growing")
+        if epoch_num < 30 or (self.som_loss_history[-1] > self.som_loss_history[-2] and self.som_loss_history[-1] > self.som_loss_history[-3]):
             self.grow(unit_errors)
             print(f"Current grid size: ({self.current_row_num}, {self.current_col_num})")
             self.to(device)
             output = True
         else:
-            print(f"MQE {global_mqe} < Threshold {growth_threshold}. Not needed to expand")
+            output = False
 
         self.train()
         return output
