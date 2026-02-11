@@ -254,40 +254,8 @@ class AutoEncoder(nn.Module):
     def get_weight_of_node(self, flat_idx):
         return self.som_weights[flat_idx]
 
-    def save_som_loss(self, som_loss):
+    def save_mqe(self, som_loss):
         self.som_loss_history.append(som_loss)
-
-    def calculate_mqe0(self, loader, device):
-        self.eval()
-        all_latent = []
-
-        with torch.no_grad():
-            for images, labels in loader:
-                images = images.to(device)
-
-                latent = self.encoder(images)
-                patches = latent[:, 1:, :]
-                # (batch, 784)
-                flat_latent = patches.reshape(patches.shape[0], -1)
-                all_latent.append(flat_latent.cpu())
-
-        # (n_samples, 784)
-        data_latent = torch.cat(all_latent, dim=0)
-        # centroid as a mean of latent, shape (1,784)
-        centroid_latent = torch.mean(data_latent, dim=0, keepdim=True)
-
-        data_latent = data_latent.to(device)
-        centroid_latent = centroid_latent.to(device)
-
-        # mqe0 as distance from all latent to centroid latent - latent variance
-        dists = cosine_distance_torch(centroid_latent, data_latent)
-        mqe0 = torch.mean(dists).item()
-
-        print(f"Latent variance (mqe0): {mqe0}")
-        print(f"Spread Factor: {self.spread_factor}")
-        print(f"Threshold, mqe0 * spread_factor: {mqe0 * self.spread_factor}")
-        return mqe0
-
 
     def find_dissimilar_neighbour(self, e_index, e_index_flat):
         e_weight = self.get_weight_of_node(e_index_flat)
@@ -414,19 +382,27 @@ class AutoEncoder(nn.Module):
 
         return unit_errors, global_mqe
 
-    def check_growth(self, loader, device, epoch_num):
+    def check_growth(self, loader, device, epoch_num, grow_after_num):
 
         self.eval()
         unit_errors, global_mqe = self.calculate_unit_errors(loader, device)
+        self.save_mqe(global_mqe)
+
         output = False
 
-        if epoch_num < 30 or (self.som_loss_history[-1] > self.som_loss_history[-2] and self.som_loss_history[-1] > self.som_loss_history[-3]):
+        if epoch_num > 3 * grow_after_num and len(self.som_loss_history) < 3:
+            raise ValueError("Error in config: grow after certain number of epochs")
+
+        improvement1 = self.som_loss_history[-2] - self.som_loss_history[-1]
+        improvement2 = self.som_loss_history[-3] - self.som_loss_history[-1]
+        threshold = 0.00001
+        if epoch_num < 3 * grow_after_num or improvement1 > threshold or improvement2 > threshold:
             self.grow(unit_errors)
             print(f"Current grid size: ({self.current_row_num}, {self.current_col_num})")
             self.to(device)
             output = True
         else:
-            output = False
+            print("Grow improvement is not greater that two last grow epochs")
 
         self.train()
         return output
