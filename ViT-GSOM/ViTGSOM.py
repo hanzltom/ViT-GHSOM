@@ -16,9 +16,14 @@ class SomLoss(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, input_vectors, som_weights, grid_coords, sigma):
+    def forward(self, latent_vectors, som_weights, grid_coords, sigma):
+        # latent vector shape: (batch, sequence of patches + cls, embed_dim), cls not needed for SOM, only patches
+        patches = latent_vectors[:, 1:, :]
+
+        som_input = patches.reshape(patches.shape[0], -1)
+
         # distance for all samples in batch, shape (batch, Num_Units)
-        dists = cosine_distance_torch(som_weights, input_vectors)
+        dists = cosine_distance_torch(som_weights, som_input)
 
         # indices of bmu for each sample in batch, size (batch,)
         bmu_indices = torch.argmin(dists, dim=1)
@@ -37,23 +42,16 @@ class SomLoss(nn.Module):
         loss = neighbourhood_influence * dists
         return loss.sum(dim=1).mean() # Equation 3
 
-class ViTSOMLoss(nn.Module):
+class ViTLoss(nn.Module):
     def __init__(self):
         super().__init__()
         
         self.mseLoss = nn.MSELoss()
-        self.somLoss = SomLoss()
 
-    def forward(self, original_img, reconstructed, latent_vectors, som_weights, grid_coords, sigma, current_lamda):
+    def forward(self, original_img, reconstructed):
         l_nn = self.mseLoss(original_img, reconstructed)
 
-        # latent vector shape: (batch, sequence of patches + cls, embed_dim), cls not needed for SOM, only patches
-        patches = latent_vectors[:, 1:, :] 
-        
-        som_input = patches.reshape(patches.shape[0], -1)
-        l_som = self.somLoss(som_input, som_weights, grid_coords, sigma)
-        l_total = (current_lamda * l_som) + l_nn
-        return l_total, l_nn, l_som        # Eq. 6
+        return l_nn
 
 
 def unpatch(x, patch_size=4, channels=1):
@@ -220,7 +218,7 @@ class ViTDecoder(nn.Module):
 
 class AutoEncoder(nn.Module):
     def __init__(self, img_size=28, patch_size=4, num_of_channels=1, embed_dim=16, enc_depth=4,
-                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 2, som_cols = 2, spread_factor = 0.5):
+                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 2, som_cols = 2):
         super().__init__()
 
         assert img_size % patch_size == 0, f"Image size ({img_size}) must be divisible by patch size ({patch_size})."
@@ -234,8 +232,7 @@ class AutoEncoder(nn.Module):
 
         self.current_row_num = som_rows
         self.current_col_num = som_cols
-        self.spread_factor = spread_factor
-        self.mqe0 = None
+        self.som_loss_history = []
         self.som_dim = self.num_of_patches * embed_dim
         self.som_weights = nn.Parameter(torch.randn(self.current_row_num * self.current_col_num, self.som_dim))
 
@@ -257,37 +254,8 @@ class AutoEncoder(nn.Module):
     def get_weight_of_node(self, flat_idx):
         return self.som_weights[flat_idx]
 
-    def calculate_mqe0(self, loader, device):
-        self.eval()
-        all_latent = []
-
-        with torch.no_grad():
-            for images, labels in loader:
-                images = images.to(device)
-
-                latent = self.encoder(images)
-                patches = latent[:, 1:, :]
-                # (batch, 784)
-                flat_latent = patches.reshape(patches.shape[0], -1)
-                all_latent.append(flat_latent.cpu())
-
-        # (n_samples, 784)
-        data_latent = torch.cat(all_latent, dim=0)
-        # centroid as a mean of latent, shape (1,784)
-        centroid_latent = torch.mean(data_latent, dim=0, keepdim=True)
-
-        data_latent = data_latent.to(device)
-        centroid_latent = centroid_latent.to(device)
-
-        # mqe0 as distance from all latent to centroid latent - latent variance
-        dists = cosine_distance_torch(centroid_latent, data_latent)
-        mqe0 = torch.mean(dists).item()
-
-        print(f"Latent variance (mqe0): {mqe0}")
-        print(f"Spread Factor: {self.spread_factor}")
-        print(f"Threshold, mqe0 * spread_factor: {mqe0 * self.spread_factor}")
-        return mqe0
-
+    def save_mqe(self, som_loss):
+        self.som_loss_history.append(som_loss)
 
     def find_dissimilar_neighbour(self, e_index, e_index_flat):
         e_weight = self.get_weight_of_node(e_index_flat)
@@ -414,23 +382,27 @@ class AutoEncoder(nn.Module):
 
         return unit_errors, global_mqe
 
-    def check_growth(self, loader, device):
-        if self.mqe0 is None:
-            self.mqe0 = self.calculate_mqe0(loader, device)
+    def check_growth(self, loader, device, epoch_num, grow_after_num):
 
         self.eval()
         unit_errors, global_mqe = self.calculate_unit_errors(loader, device)
+        self.save_mqe(global_mqe)
+
         output = False
 
-        growth_threshold = self.spread_factor * self.mqe0
-        if global_mqe > growth_threshold:
-            print(f"MQE {global_mqe} > Threshold {growth_threshold}. Growing")
+        if epoch_num > 3 * grow_after_num and len(self.som_loss_history) < 3:
+            raise ValueError("Error in config: grow after certain number of epochs")
+
+        improvement1 = self.som_loss_history[-2] - self.som_loss_history[-1]
+        improvement2 = self.som_loss_history[-3] - self.som_loss_history[-1]
+        threshold = 0.00001
+        if epoch_num < 3 * grow_after_num or improvement1 > threshold or improvement2 > threshold:
             self.grow(unit_errors)
             print(f"Current grid size: ({self.current_row_num}, {self.current_col_num})")
             self.to(device)
             output = True
         else:
-            print(f"MQE {global_mqe} < Threshold {growth_threshold}. Not needed to expand")
+            print("Grow improvement is not greater that two last grow epochs")
 
         self.train()
         return output
