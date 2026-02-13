@@ -1,26 +1,58 @@
+import math
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib import animation, colors
 from IPython.display import HTML
+from typing import Callable
 
 """
 Distance functions
 """
 
-def euclidean_distance(a, b, axis):
+def euclidean_distance(a: np.ndarray, b: np.ndarray, axis: int) -> float:
+    """
+    Euclidean distance between two vectors.
+    :param a: Vector a
+    :param b: Vector b
+    :param axis: Axis where distance is computed
+    :return: Distance
+    """
     diff = np.abs(a - b)
     return np.linalg.norm(diff, axis=axis)
 
-def manhattan_distance(a, b, axis):
+def manhattan_distance(a: np.ndarray, b: np.ndarray, axis: int) -> float:
+    """
+    Manhattan distance between two vectors.
+    :param a: Vector a
+    :param b: Vector b
+    :param axis: Axis where distance is computed
+    :return: Distance
+    """
     diff = np.abs(a - b)
     return np.sum(diff, axis=axis)
 
-def chebyshev_distance(a, b, axis):
+def chebyshev_distance(a: np.ndarray, b: np.ndarray, axis: int) -> float:
+    """
+    Chebyshev distance between two vectors.
+    :param a: Vector a
+    :param b: Vector b
+    :param axis: Axis where distance is computed
+    :return: Distance
+    """
     diff = np.abs(a - b)
     return np.max(diff, axis=axis)
 
-def generic_distance(a, b, axis, k):
+def generic_distance(a: np.ndarray, b: np.ndarray, axis: int, k: int) -> float:
+    """
+    Generic distance from Minskowski distance functions
+    :param a: Vector a
+    :param b: Vector b
+    :param axis: Axis where distance is computed
+    :param k: k for the formula
+    :return: Distance
+    """
     diff = np.abs(a - b)
     return np.power(np.sum(np.power(diff, k), axis=axis), 1.0 / k)
 
@@ -28,16 +60,40 @@ def generic_distance(a, b, axis, k):
 """
 Neighbourhood distance functions
 """
-def gaussian_neighbourhood(grid_dists, sigma_t):
+def gaussian_neighbourhood(grid_dists: np.ndarray, sigma_t: float) -> np.ndarray:
+    """
+    Gaussian neighbourhood influence function
+    :param grid_dists: Distance from the BMU to other neurons
+    :param sigma_t: Sigma at given time
+    :return: Gaussian influence
+    """
     return np.exp(- (grid_dists ** 2) / (2 * (sigma_t ** 2)))
 
-def rectangular_neighbourhood(grid_dists, sigma_t):
+def rectangular_neighbourhood(grid_dists: np.ndarray, sigma_t: float) -> np.ndarray:
+    """
+    Rectangular neighbourhood influence function
+    :param grid_dists: Distance from the BMU to other neurons
+    :param sigma_t: Sigma at given time
+    :return: Rectangular influence
+    """
     return (grid_dists <= sigma_t).astype(float)
 
-def triangular_neighbourhood(grid_dists, sigma_t):
+def triangular_neighbourhood(grid_dists: np.ndarray, sigma_t: float) -> np.ndarray:
+    """
+    Triangular neighbourhood influence function
+    :param grid_dists: Distance from the BMU to other neurons
+    :param sigma_t: Sigma at given time
+    :return: Triangular influence
+    """
     return np.maximum(0.0, 1.0 - (grid_dists / sigma_t))
 
-def cosine_down_to_zero_neighbourhood(grid_dists, sigma_t):
+def cosine_down_to_zero_neighbourhood(grid_dists: np.ndarray, sigma_t: float) -> np.ndarray:
+    """
+    Cosine down to zero neighbourhood influence function
+    :param grid_dists: Distance from the BMU to other neurons
+    :param sigma_t: Sigma at given time
+    :return: Cosine influence
+    """
     influence = np.zeros_like(grid_dists)
     mask = grid_dists <= 2 * sigma_t
 
@@ -49,11 +105,25 @@ def cosine_down_to_zero_neighbourhood(grid_dists, sigma_t):
 Decay function
 """
 
-def decay_exponential(initial_value, beta, t):
+def decay_exponential(initial_value: float, beta: float, t: int) -> float:
+    """
+    Decay exponential function
+    :param initial_value: Initial value
+    :param beta: Beta value, must satisfy: 0 < beta < 1
+    :param t: Current time
+    :return: Decayed initial value
+    """
     return initial_value * (beta ** t)
 
 
-def decay_power(initial_value, beta, t):
+def decay_power(initial_value: float, beta: float, t: int) -> float:
+    """
+    Decay power function
+    :param initial_value: Initial value
+    :param beta: Beta value, must satisfy: beta < 0
+    :param t: Current time
+    :return: Decayed initial value
+    """
     return initial_value * (t ** beta)
 
 
@@ -62,12 +132,28 @@ Visualization
 """
 
 
-def generate_label_matrix(weight_matrix, data, labels, map_width, map_height, calculate_distance_func):
+def generate_label_matrix(weight_matrix: np.ndarray,
+                          data: np.ndarray,
+                          labels: np.ndarray,
+                          map_rows: int,
+                          map_cols: int,
+                          calculate_distance_func: Callable[[np.ndarray, np.ndarray, int], float]
+                          ) -> np.ndarray:
+    """
+    Function to generate a matrix where the label of each node represents the major class
+    :param weight_matrix: SOM weight matrix
+    :param data: Dataset
+    :param labels: Target labels
+    :param map_rows: Number of rows in the map
+    :param map_cols: Number of columns in the map
+    :param calculate_distance_func: Distance function
+    :return: Matrix with labels
+    """
     # https://medium.com/data-science/understanding-self-organising-map-neural-network-with-python-code-7a77f501e985
-    map = np.empty(shape=(map_width, map_height), dtype=object)
+    map = np.empty(shape=(map_rows, map_cols), dtype=object)
 
-    for row in range(map_width):
-        for col in range(map_height):
+    for row in range(map_rows):
+        for col in range(map_cols):
             map[row][col] = []
 
     for i, sample in enumerate(data):
@@ -77,50 +163,88 @@ def generate_label_matrix(weight_matrix, data, labels, map_width, map_height, ca
 
         map[bmu_idx[0]][bmu_idx[1]].append(labels[i])
 
-    for row in range(map_width):
-        for col in range(map_height):
+    for row in range(map_rows):
+        for col in range(map_cols):
             label_list = map[row][col]
             if len(label_list) == 0:
                 label = np.nan
             else:
+                # get the label of the majority class
                 label = max(label_list, key=label_list.count)
             map[row][col] = label
 
     return map.astype(float)
 
 
-def generate_label_matrix_db(weights_db, data, labels, map_width, map_height, calculate_distance_func):
+def generate_label_matrix_db(weights_db: dict[int: np.ndarray],
+                             data: np.ndarray,
+                             labels: np.ndarray,
+                             map_rows: int,
+                             map_cols: int,
+                             calculate_distance_func: Callable[[np.ndarray, np.ndarray, int], float]
+                             ) -> dict[int: np.ndarray]:
+    """
+    Function to generate label matrix for each epoch in the SOM weights database
+    :param weights_db: SOM weights database
+    :param data: Dataset
+    :param labels: Target labels
+    :param map_rows: Number of rows in the map
+    :param map_cols: Number of columns in the map
+    :param calculate_distance_func: Distance function
+    :return: Dictionary of label matrix for each epoch
+    """
     label_matrix_db = {}
     for epoch, weight_matrix in weights_db.items():
-        label_matrix_db[epoch] = generate_label_matrix(weight_matrix, data, labels, map_width, map_height, calculate_distance_func)
+        label_matrix_db[epoch] = generate_label_matrix(weight_matrix, data, labels, map_rows, map_cols, calculate_distance_func)
 
     return label_matrix_db
 
 
-def visualize_label_matrix(som, y, epoch_num):
+def visualize_label_matrix(som: "SOM", y: np.ndarray, epoch_num: int):
+    """
+    Function to visualize label matrix
+    :param som: SOM class
+    :param y: Target labels
+    :param epoch_num: Epoch for which we want the label matrix
+    """
+
     map = som.label_matrix_db[epoch_num]
     y_unique = np.unique(y)
-    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
+
+    # define colors
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
+                     'tab:olive', 'tab:cyan']
     cmap = colors.ListedColormap(color_options[:len(y_unique)])
     cmap.set_bad(color='lightgrey')
 
+    # create figure
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(map, cmap=cmap)
     ax.set_title(f"Epoch: {epoch_num}")
+
+    # create patches for the legend
     patches = [mpatches.Patch(color=color_options[i], label=label) for i, label in enumerate(y_unique)]
     patches.append(mpatches.Patch(color='lightgrey', label='Empty'))
     ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.show()
 
 
-def generate_label_matrix_vid(som, y):
+def generate_label_matrix_vid(som: "SOM", y: np.ndarray):
+    """
+    Function to animate change of label matrix during training
+    :param som:
+    :param y:
+    :return: HTML video
+    """
     db = som.label_matrix_db
     epochs = sorted(db.keys())
     y_unique = np.unique(y)
 
     fig, ax = plt.subplots(figsize=(8, 8))
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
-    cmap = colors.ListedColormap(color_options[:len(y_unique) % len(color_options)])
+    num_repeats = math.ceil(len(y_unique) / len(color_options))
+    extended_colors = (color_options * num_repeats)[:len(y_unique)]
+    cmap = colors.ListedColormap(extended_colors)
 
     im = ax.imshow(db[1], cmap=cmap)
 
@@ -149,10 +273,16 @@ def generate_label_matrix_vid(som, y):
     return HTML(anim.to_jshtml())
 
 
-def generate_u_matrix(weight_matrix):
+def generate_u_matrix(weight_matrix: np.ndarray) -> np.ndarray:
+    """
+    Function to generate U-Matrix
+    :param weight_matrix: Weights matrix
+    :return: U-Matrix
+    """
     m, n, dim = weight_matrix.shape
     u_matrix = np.zeros((m, n))
 
+    # for each neuron, calculate the mean distance to its neighbours in rectangular grid
     for r in range(m):
         for c in range(n):
             distances = []
@@ -162,6 +292,7 @@ def generate_u_matrix(weight_matrix):
                 if 0 <= cn < n and 0 <= rn < m:
                     neighbor_neuron = weight_matrix[rn, cn]
 
+                    # calculate Euclidean distance
                     dist = np.linalg.norm(current_neuron - neighbor_neuron)
                     distances.append(dist)
 
@@ -170,7 +301,12 @@ def generate_u_matrix(weight_matrix):
     return u_matrix
 
 
-def generate_u_matrix_db(weights_db):
+def generate_u_matrix_db(weights_db: dict[int: np.ndarray]) -> dict[int: np.ndarray]:
+    """
+    Function to generate U-Matrix database for each epoch
+    :param weights_db: Database of weights for each epoch
+    :return: Database of U-Matrices
+    """
     u_matrix_db = {}
     for epoch, weight_matrix in weights_db.items():
         u_matrix_db[epoch] = generate_u_matrix(weight_matrix)
@@ -178,7 +314,12 @@ def generate_u_matrix_db(weights_db):
     return u_matrix_db
 
 
-def visualize_u_matrix(som, epoch_num):
+def visualize_u_matrix(som: "SOM", epoch_num: int):
+    """
+    Function to visualize U-Matrix
+    :param som: SOM class
+    :param epoch_num: Epoch for which we want the U-Matrix
+    """
     matrix = som.u_matrix_db[epoch_num]
     ig, ax = plt.subplots(figsize=(8, 8))
 
@@ -191,8 +332,12 @@ def visualize_u_matrix(som, epoch_num):
     plt.show()
 
 
-
 def generate_u_matrix_vid(som):
+    """
+    Function to animate change of U-Matrix during training
+    :param som: SOM class
+    :return: HTML video
+    """
     db = som.u_matrix_db
     epochs = sorted(db.keys())
 
@@ -225,7 +370,12 @@ def generate_u_matrix_vid(som):
     return HTML(anim.to_jshtml())
 
 
-def generate_extended_u_matrix(weight_matrix):
+def generate_extended_u_matrix(weight_matrix: np.ndarray) -> np.ndarray:
+    """
+    Function to generate Extended U-Matrix
+    :param weight_matrix: Weights matrix
+    :return: Extended U-Matrix
+    """
     m, n, dim = weight_matrix.shape
 
     # Size of extended U-Matrix (2m-1)*(2n-1)
@@ -269,17 +419,26 @@ def generate_extended_u_matrix(weight_matrix):
 
             u_matrix_extended[r,c] = np.mean(distances)
 
-
     return u_matrix_extended
 
-def generate_u_matrix_extended_db(weights_db):
+def generate_u_matrix_extended_db(weights_db: dict[int: np.ndarray]) -> dict[int: np.ndarray]:
+    """
+    Function to generate Extended U-Matrix database for each epoch
+    :param weights_db: Database of weights for each epoch
+    :return: Database of Extended U-Matrices
+    """
     u_matrix_extended_db = {}
     for epoch, weight_matrix in weights_db.items():
         u_matrix_extended_db[epoch] = generate_extended_u_matrix(weight_matrix)
 
     return u_matrix_extended_db
 
-def visualize_u_matrix_extended(som, epoch_num):
+def visualize_u_matrix_extended(som: "SOM", epoch_num: int):
+    """
+    Function to visualize U-Matrix
+    :param som: SOM class
+    :param epoch_num: Epoch for which we want the U-Matrix
+    """
     matrix = som.u_matrix_extended_db[epoch_num]
     fig, ax = plt.subplots(figsize=(10, 10))
 
@@ -306,6 +465,11 @@ def visualize_u_matrix_extended(som, epoch_num):
     plt.show()
 
 def generate_u_matrix_extended_vid(som):
+    """
+        Function to animate change of Extended U-Matrix during training
+        :param som: SOM class
+        :return: HTML video
+        """
     db = som.u_matrix_extended_db
     epochs = sorted(db.keys())
 
