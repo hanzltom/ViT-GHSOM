@@ -62,23 +62,23 @@ Visualization
 """
 
 
-def generate_label_matrix(model, weight_matrix, data, labels):
+def generate_label_matrix(weight_matrix, data, labels, map_width, map_height, calculate_distance_func):
     # https://medium.com/data-science/understanding-self-organising-map-neural-network-with-python-code-7a77f501e985
-    map = np.empty(shape=(model.map_width, model.map_height), dtype=object)
+    map = np.empty(shape=(map_width, map_height), dtype=object)
 
-    for row in range(model.map_width):
-        for col in range(model.map_height):
+    for row in range(map_width):
+        for col in range(map_height):
             map[row][col] = []
 
     for i, sample in enumerate(data):
-        dists = model.calculate_distance_func(weight_matrix, sample, 2)
+        dists = calculate_distance_func(weight_matrix, sample, 2)
         min_index = np.argmin(dists)
         bmu_idx = np.unravel_index(min_index, dists.shape)
 
         map[bmu_idx[0]][bmu_idx[1]].append(labels[i])
 
-    for row in range(model.map_width):
-        for col in range(model.map_height):
+    for row in range(map_width):
+        for col in range(map_height):
             label_list = map[row][col]
             if len(label_list) == 0:
                 label = np.nan
@@ -89,15 +89,16 @@ def generate_label_matrix(model, weight_matrix, data, labels):
     return map.astype(float)
 
 
-def generate_label_matrix_db(model, data, labels):
+def generate_label_matrix_db(weights_db, data, labels, map_width, map_height, calculate_distance_func):
     label_matrix_db = {}
-    for epoch, weight_matrix in model.weights_db.items():
-        label_matrix_db[epoch] = generate_label_matrix(model, weight_matrix, data, labels)
+    for epoch, weight_matrix in weights_db.items():
+        label_matrix_db[epoch] = generate_label_matrix(weight_matrix, data, labels, map_width, map_height, calculate_distance_func)
 
     return label_matrix_db
 
 
-def visualize_label_matrix(map, y, epoch_num):
+def visualize_label_matrix(som, y, epoch_num):
+    map = som.label_matrix_db[epoch_num]
     y_unique = np.unique(y)
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
     cmap = colors.ListedColormap(color_options[:len(y_unique)])
@@ -112,7 +113,8 @@ def visualize_label_matrix(map, y, epoch_num):
     plt.show()
 
 
-def generate_label_matrix_vid(db, y):
+def generate_label_matrix_vid(som, y):
+    db = som.label_matrix_db
     epochs = sorted(db.keys())
     y_unique = np.unique(y)
 
@@ -120,7 +122,7 @@ def generate_label_matrix_vid(db, y):
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
     cmap = colors.ListedColormap(color_options[:len(y_unique) % len(color_options)])
 
-    im = ax.imshow(db[0], cmap=cmap)
+    im = ax.imshow(db[1], cmap=cmap)
 
     patches = [mpatches.Patch(color=color_options[i], label=label) for i, label in enumerate(y_unique)]
     patches.append(mpatches.Patch(color='tab:grey', label='Empty'))
@@ -168,15 +170,16 @@ def generate_u_matrix(weight_matrix):
     return u_matrix
 
 
-def generate_u_matrix_db(model):
+def generate_u_matrix_db(weights_db):
     u_matrix_db = {}
-    for epoch, weight_matrix in model.weights_db.items():
+    for epoch, weight_matrix in weights_db.items():
         u_matrix_db[epoch] = generate_u_matrix(weight_matrix)
 
     return u_matrix_db
 
 
-def visualize_u_matrix(matrix, epoch_num):
+def visualize_u_matrix(som, epoch_num):
+    matrix = som.u_matrix_db[epoch_num]
     ig, ax = plt.subplots(figsize=(8, 8))
 
     im = ax.imshow(matrix, cmap='plasma')
@@ -189,13 +192,14 @@ def visualize_u_matrix(matrix, epoch_num):
 
 
 
-def generate_u_matrix_vid(db):
+def generate_u_matrix_vid(som):
+    db = som.u_matrix_db
     epochs = sorted(db.keys())
 
     fig, ax = plt.subplots(figsize=(8, 8))
     values = [db[e] for e in epochs]
 
-    im = ax.imshow(db[0], cmap='plasma', vmin=np.min(values), vmax=np.max(values))
+    im = ax.imshow(db[1], cmap='plasma', vmin=np.min(values), vmax=np.max(values))
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label('Average Distance to Neighbours')
 
@@ -268,14 +272,15 @@ def generate_extended_u_matrix(weight_matrix):
 
     return u_matrix_extended
 
-def generate_u_matrix_extended_db(model):
+def generate_u_matrix_extended_db(weights_db):
     u_matrix_extended_db = {}
-    for epoch, weight_matrix in model.weights_db.items():
+    for epoch, weight_matrix in weights_db.items():
         u_matrix_extended_db[epoch] = generate_extended_u_matrix(weight_matrix)
 
     return u_matrix_extended_db
 
-def visualize_u_matrix_extended(matrix, epoch_num):
+def visualize_u_matrix_extended(som, epoch_num):
+    matrix = som.u_matrix_extended_db[epoch_num]
     fig, ax = plt.subplots(figsize=(10, 10))
 
     im = ax.imshow(matrix, cmap='plasma')
@@ -300,13 +305,14 @@ def visualize_u_matrix_extended(matrix, epoch_num):
     plt.tight_layout()
     plt.show()
 
-def generate_u_matrix_extended_vid(db):
+def generate_u_matrix_extended_vid(som):
+    db = som.u_matrix_extended_db
     epochs = sorted(db.keys())
 
     fig, ax = plt.subplots(figsize=(10, 10))
     values = [db[e] for e in epochs]
 
-    im = ax.imshow(db[0], cmap='plasma', vmin=np.min(values), vmax=np.max(values))
+    im = ax.imshow(db[1], cmap='plasma', vmin=np.min(values), vmax=np.max(values))
     m, n = values[0].shape
 
     neuron_x_coords = []
