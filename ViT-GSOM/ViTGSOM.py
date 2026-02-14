@@ -382,27 +382,12 @@ class AutoEncoder(nn.Module):
 
         return unit_errors, global_mqe
 
-    def check_growth(self, loader, device, epoch_num, grow_after_num):
-
+    def start_growth(self, loader, device):
         self.eval()
         unit_errors, global_mqe = self.calculate_unit_errors(loader, device)
-        self.save_mqe(global_mqe)
 
-        output = False
-
-        if epoch_num > 3 * grow_after_num and len(self.som_loss_history) < 3:
-            raise ValueError("Error in config: grow after certain number of epochs")
-
-        improvement1 = self.som_loss_history[-2] - self.som_loss_history[-1]
-        improvement2 = self.som_loss_history[-3] - self.som_loss_history[-1]
-        threshold = 0.00001
-        if epoch_num < 3 * grow_after_num or improvement1 > threshold or improvement2 > threshold:
-            self.grow(unit_errors)
-            print(f"Current grid size: ({self.current_row_num}, {self.current_col_num})")
-            self.to(device)
-            output = True
-        else:
-            print("Grow improvement is not greater that two last grow epochs")
-
+        self.grow(unit_errors)
+        print(f"Current grid size: ({self.current_row_num}, {self.current_col_num})")
+        self.to(device)
         self.train()
-        return output
+        return True
