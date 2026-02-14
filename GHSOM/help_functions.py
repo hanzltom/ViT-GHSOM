@@ -202,33 +202,24 @@ def visualize_label_matrix(ghsom: "GHSOM", y: np.ndarray, gsom_id: str):
     :param y: Target labels
     :param gsom_id: ID of GSOM to visualize its label matrix
     """
-    # TODO change for correct visualization and test it
-    matrix = ghsom.gsom_db[gsom_id]
-
+    map = ghsom.label_matrix_db[gsom_id]
     y_unique = np.unique(y)
-    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
+
+    # define colors
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
+                     'tab:olive', 'tab:cyan']
     cmap = colors.ListedColormap(color_options[:len(y_unique)])
     cmap.set_bad(color='lightgrey')
 
+    # create figure
     fig, ax = plt.subplots(figsize=(8, 8))
-    ax.imshow(matrix, cmap=cmap)
-
-    m, n = matrix.shape
-
-    neuron_x_coords = []
-    neuron_y_coords = []
-
-    for r in range(0, m):
-        for c in range(0, n):
-            neuron_y_coords.append(r)
-            neuron_x_coords.append(c)
-
-    ax.scatter(neuron_x_coords, neuron_y_coords, s=30, c='yellow', edgecolors='black', label='Neuron Position')
-
+    ax.imshow(map, cmap=cmap)
     ax.set_title(f"GSOM id: {gsom_id}")
+
+    # create patches for the legend
     patches = [mpatches.Patch(color=color_options[i], label=label) for i, label in enumerate(y_unique)]
     patches.append(mpatches.Patch(color='lightgrey', label='Empty'))
-    ax.legend(handles=patches, bbox_to_anchor=(1.1, 1), loc='upper left')
+    ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.show()
 
 
