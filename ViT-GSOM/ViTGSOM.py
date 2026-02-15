@@ -13,10 +13,28 @@ https://www.geeksforgeeks.org/deep-learning/implementing-an-autoencoder-in-pytor
 """
 
 class SomLoss(nn.Module):
+    """
+    Class to calculate SOM loss for weights update
+    """
     def __init__(self):
+        """
+        Constructor for SomLoss class
+        """
         super().__init__()
 
-    def forward(self, latent_vectors, som_weights, grid_coords, sigma):
+    def forward(self,
+                latent_vectors: torch.Tensor,
+                som_weights: torch.Tensor,
+                grid_coords: torch.Tensor,
+                sigma: float) -> torch.Tensor:
+        """
+        Forward pass to compute SOM loss
+        :param latent_vectors: Patch embeddings from the encoder of shape ``(batch_size, seq_len + 1, embed_dim)``
+        :param som_weights: SOM weight tensor of shape ``(n_nodes, n_features)``
+        :param grid_coords: Grid coordinate tensor of shape ``(n_nodes, 2)``
+        :param sigma: The current neighborhood radius
+        :return: Scalar loss tensor
+        """
         # latent vector shape: (batch, sequence of patches + cls, embed_dim), cls not needed for SOM, only patches
         patches = latent_vectors[:, 1:, :]
 
@@ -43,19 +61,37 @@ class SomLoss(nn.Module):
         return loss.sum(dim=1).mean() # Equation 3
 
 class ViTLoss(nn.Module):
+    """
+    Class to calculate ViT loss for weights update
+    """
     def __init__(self):
+        """
+        Constructor for ViTLoss class
+        """
         super().__init__()
         
         self.mseLoss = nn.MSELoss()
 
-    def forward(self, original_img, reconstructed):
+    def forward(self, original_img: torch.Tensor, reconstructed: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass to compute ViT loss using MSE
+        :param original_img: The real input image of shape ``(batch_size, channels, height, width)``
+        :param reconstructed: The reconstructed image by the decoder of shape ``(batch_size, channels, height, width)``
+        :return: Scalar loss tensor
+        """
         l_nn = self.mseLoss(original_img, reconstructed)
 
         return l_nn
 
 
-def unpatch(x, patch_size=4, channels=1):
-    # E.g. (8, 49, 3*4*4): batch of 8, 7x7 grid, num_of_channels * patch_size * patch_size
+def unpatch(x: torch.Tensor, patch_size: int = 4, channels: int = 1) -> torch.Tensor:
+    """
+    Function which transforms the patches from the decoder back to its original input size
+    :param x: Patch embeddings of shape ``(batch_size, num_patches, embed_dim)``
+    :param patch_size: Size of the patch. Defaults to ``4``
+    :param channels: Number of input channels. Defaults to ``1``
+    :return: Sequence of picture in original input size
+    """    # E.g. (8, 49, 3*4*4): batch of 8, 7x7 grid, num_of_channels * patch_size * patch_size
     B, num_patches, pixels_per_patch = x.shape
 
     if pixels_per_patch != channels * patch_size * patch_size:
@@ -83,7 +119,21 @@ def unpatch(x, patch_size=4, channels=1):
     return x
 
 class PatchEmbedding(nn.Module):
-    def __init__(self, img_size=28, patch_size=4, in_channels=1, embed_dim=16):
+    """
+    Class to split images into patches and embed them using convolutional layers
+    """
+    def __init__(self,
+                 img_size: int = 28,
+                 patch_size: int = 4,
+                 in_channels: int = 1,
+                 embed_dim: int = 16):
+        """
+        Constructor for PatchEmbedding
+        :param img_size: Size of input image. Defaults to ``28``
+        :param patch_size: Size of individual patch. Defaults to ``4``
+        :param in_channels: Number of input channels. Defaults to ``1``
+        :param embed_dim: The embedding dimension. Defaults to ``16``
+        """
         super().__init__()
         self.img_size = img_size
         self.patch_size = patch_size
@@ -92,7 +142,12 @@ class PatchEmbedding(nn.Module):
         # convolution with the stride size same as patch size -> no overlapping
         self.proj = nn.Conv2d(in_channels, embed_dim, kernel_size=patch_size, stride=patch_size)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass to create patch embeddings
+        :param x: Input batch of images of shape ``(batch_size, in_channels, img_size, img_size)``
+        :return: Patch embeddings of shape ``(batch_size, num_patches, embed_dim)``
+        """
         # Example: batch = 8, embed_dim=64, img_height=28, img_width=28, input_channels=1, patch_size=4
         # x.shape: (8, 1, 28, 28)
         # 28 / 4 = 7 -> 7x7 grid
@@ -105,15 +160,28 @@ class PatchEmbedding(nn.Module):
 
 
 class MLP(nn.Module):
-
-    def __init__(self, embed_dim, mlp_dim, dropout):
+    """
+    Multi-Layer Perceptron class
+    """
+    def __init__(self, embed_dim: int, mlp_dim: int, dropout: float):
+        """
+        Constructor for MLP
+        :param embed_dim: The embedding dimension
+        :param mlp_dim: The dimension of the hidden layer
+        :param dropout: The dropout probability
+        """
         super().__init__()
         self.dense_1 = nn.Linear(embed_dim, mlp_dim)
         self.activation = nn.GELU()
         self.dense_2 = nn.Linear(mlp_dim, embed_dim)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for MLP
+        :param x: Input tensor of shape ``(batch_size, seq_len, embed_dim)``
+        :return: Output tensor of shape ``(batch_size, seq_len, embed_dim)``
+        """
         x = self.dense_1(x)
         x = self.activation(x)
         x = self.dense_2(x)
@@ -121,15 +189,33 @@ class MLP(nn.Module):
         return x
 
 class Block(nn.Module):
-
-    def __init__(self, embed_dim, num_heads, mlp_dim, dropout=0.1):
+    """
+    Transformer Encoder Block consisting of Self-Attention and MLP
+    """
+    def __init__(self,
+                 embed_dim: int,
+                 num_heads: int,
+                 mlp_dim: int,
+                 dropout: float = 0.1):
+        """
+        Constructor for Block
+        :param embed_dim: The embedding dimension
+        :param num_heads: The number of attention heads
+        :param mlp_dim: The dimension of the hidden layer
+        :param dropout: The dropout probability. Defaults to ``0.1``
+        """
         super().__init__()
         self.attention = nn.MultiheadAttention(embed_dim, num_heads, dropout=dropout, batch_first=True)
         self.ln1 = nn.LayerNorm(embed_dim)
         self.mlp = MLP(embed_dim, mlp_dim, dropout)
         self.ln2 = nn.LayerNorm(embed_dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for the Transformer Encoder Block
+        :param x: Input tensor of shape ``(batch_size, seq_len, embed_dim)``
+        :return: Output tensor of shape ``(batch_size, seq_len, embed_dim)``
+        """
         # Self-attention
         attention_output, _ = self.attention(self.ln1(x), self.ln1(x), self.ln1(x))
         # Skip connection
@@ -141,9 +227,28 @@ class Block(nn.Module):
         return x
 
 class ViTEncoder(nn.Module):
+    """
+    Vision Transformer Encoder.
+    """
 
-    def __init__(self, img_size=28, patch_size=4, in_channels=1,
-                 embed_dim=16, depth=4, num_heads=2, mlp_dim=64):
+    def __init__(self,
+                 img_size: int = 28,
+                 patch_size: int = 4,
+                 in_channels: int = 1,
+                 embed_dim: int = 16,
+                 depth: int = 4,
+                 num_heads: int = 2,
+                 mlp_dim: int = 64):
+        """
+        Constructor for ViTEncoder
+        :param img_size: Size of input image. Defaults to ``28``
+        :param patch_size: Size of individual patch. Defaults to ``4``
+        :param in_channels: Number of input channels. Defaults to ``1``
+        :param embed_dim: The embedding dimension. Defaults to ``16``
+        :param depth: The number of transformer encoder blocks. Defaults to ``4``
+        :param num_heads: The number of attention heads. Defaults to ``2``
+        :param mlp_dim: The dimension of the hidden layer. Defaults to ``64``
+        """
         super().__init__()
 
         self.patch_embed = PatchEmbedding(img_size, patch_size, in_channels, embed_dim)
@@ -160,19 +265,27 @@ class ViTEncoder(nn.Module):
 
         self.ln1 = nn.LayerNorm(embed_dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for ViTEncoder
+        :param x: Input images of shape ``(batch_size, in_channels, img_size, img_size)``
+        :return: Encoded features of shape ``(batch_size, num_patches + 1, embed_dim)``
+        """
         # create patches
+        # x shape: (batch_size, num_patches, embed_dim)
         B = x.shape[0]
         x = self.patch_embed(x)
 
         # Add CLS token
+        # cls_tokens shape: (batch_size, 1, embed_dim)
         cls_tokens = self.cls_token.expand(B, -1, -1)
+        # x shape: (batch_size, num_patches + 1, embed_dim)
         x = torch.cat((cls_tokens, x), dim=1)
 
         # Add Positional Embedding
         x = x + self.pos_embed
 
-        # apply self attention layers and mlp
+        # apply self-attention layers and mlp
         for block in self.blocks:
             x = block(x)
 
@@ -182,7 +295,28 @@ class ViTEncoder(nn.Module):
 
 
 class ViTDecoder(nn.Module):
-    def __init__(self, num_patches, patch_size=4, output_dim = 1, embed_dim=16, depth=2, num_heads=2, mlp_dim=64):
+    """
+    Vision Transformer Decoder.
+    """
+
+    def __init__(self,
+                 num_patches: int,
+                 patch_size: int = 4,
+                 output_dim: int = 1,
+                 embed_dim: int = 16,
+                 depth: int = 2,
+                 num_heads: int = 2,
+                 mlp_dim: int = 64):
+        """
+        Constructor for ViTDecoder
+        :param num_patches: Total number of patches
+        :param patch_size: Size of individual patch. Defaults to ``4``
+        :param output_dim: Number of output channels. Defaults to ``1``
+        :param embed_dim: The embedding dimension. Defaults to ``16``
+        :param depth: The number of transformer encoder blocks. Defaults to ``4``
+        :param num_heads: The number of attention heads. Defaults to ``2``
+        :param mlp_dim: The dimension of the hidden layer. Defaults to ``64``
+        """
         super().__init__()
 
         # reconstruction to original pixels: patch_size * patch_size * channels
@@ -198,9 +332,16 @@ class ViTDecoder(nn.Module):
             self.blocks.append(block)
 
         self.ln1 = nn.LayerNorm(embed_dim)
+
+        # final projection to map embeddings back to pixel values
         self.head = nn.Linear(embed_dim, self.pixels_per_patch)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for ViTDecoder
+        :param x: Encoded features of shape ``(batch_size, num_patches + 1, embed_dim)``
+        :return: Reconstructed patches of shape ``(batch_size, num_patches, pixels_per_patch)``
+        """
         # positional embeddings in latent space
         x = x + self.pos_embed
 
@@ -209,55 +350,114 @@ class ViTDecoder(nn.Module):
             x = block(x)
 
         x = self.ln1(x)
-        # removing CLS token (e.g. from PatchEmbedding (8, 50, 64) -> (8, 49, 64))
+        # removing CLS token (8, 50, 64) -> (8, 49, 64)
         x = x[:, 1:, :]
 
-        # projection back to pixel space
-        x = self.head(x)  # e.g. (8, 49, 64) -> (8, 49, 16): (B, grid 7x7, pixels per patch)
+        # projection back to pixel space (8, 49, 64) -> (8, 49, 16): (B, grid 7x7, pixels per patch)
+        x = self.head(x)
         return x
 
 class AutoEncoder(nn.Module):
-    def __init__(self, img_size=28, patch_size=4, num_of_channels=1, embed_dim=16, enc_depth=4,
-                 dec_depth=2, num_heads=2, mlp_dim=64, som_rows = 2, som_cols = 2):
+    """
+    Vision Autoencoder with an integrated Self-Organizing Map layer
+    """
+    def __init__(self,
+                 img_size: int = 28,
+                 patch_size: int = 4,
+                 num_of_channels: int = 1,
+                 embed_dim: int = 16,
+                 enc_depth: int = 4,
+                 dec_depth: int = 2,
+                 num_heads: int = 2,
+                 mlp_dim: int = 64,
+                 som_rows: int = 5,
+                 som_cols: int = 5):
+        """
+        Constructor for AutoEncoder
+        :param img_size: Size of input image. Defaults to ``28``
+        :param patch_size: Size of individual patch. Defaults to ``4``
+        :param num_of_channels: Number of input channels. Defaults to ``1``
+        :param embed_dim: The embedding dimension. Defaults to ``16``
+        :param enc_depth: The number of transformer encoder blocks. Defaults to ``4``
+        :param dec_depth: The number of transformer decoder blocks. Defaults to ``2``
+        :param num_heads: The number of attention heads. Defaults to ``2``
+        :param mlp_dim: The dimension of the hidden layer. Defaults to ``64``
+        :param som_rows: Number of rows in the SOM grid
+        :param som_cols: Number of columns in the SOM grid
+        """
         super().__init__()
 
-        assert img_size % patch_size == 0, f"Image size ({img_size}) must be divisible by patch size ({patch_size})."
+        # ensure image size can be divided by the size of the patch
+        if img_size % patch_size != 0:
+            raise ValueError(f"Image size ({img_size}) must be divisible by patch size ({patch_size}).")
 
         self.num_of_channels = num_of_channels
         self.patch_size = patch_size
-
-        self.encoder = ViTEncoder(img_size, patch_size, num_of_channels, embed_dim, enc_depth, num_heads, mlp_dim)
         self.num_of_patches = (img_size // patch_size) ** 2
+
+        # Encoder: Image -> Latent
+        self.encoder = ViTEncoder(img_size, patch_size, num_of_channels, embed_dim, enc_depth, num_heads, mlp_dim)
+        # Decoder: Latent -> Reconstructed patches
         self.decoder = ViTDecoder(self.num_of_patches, patch_size, num_of_channels, embed_dim, dec_depth, num_heads, mlp_dim)
 
         self.current_row_num = som_rows
         self.current_col_num = som_cols
-        self.som_loss_history = []
+        # SOM weights as a torch Parameter
+        # shape (Num_SOM_Nodes, Num_Patches * Embed_Dim)
         self.som_dim = self.num_of_patches * embed_dim
         self.som_weights = nn.Parameter(torch.randn(self.current_row_num * self.current_col_num, self.som_dim))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass for AutoEncoder
+        :param x: Input images of shape ``(batch_size, in_channels, img_size, img_size)``
+        :return: Tuple containing:
+                 - output: Reconstructed images of shape ``(batch_size, num_channels, img_size, img_size)``
+                 - latent: Latent representations of shape ``(batch_size, num_patches + 1, embed_dim)``
+        """
         latent = self.encoder(x)
         patched_output = self.decoder(latent)
         output = unpatch(patched_output, self.patch_size, self.num_of_channels)
         return output, latent
 
-    def get_sigma(self):
-        return np.ceil(min(self.current_row_num, self.current_col_num) / 2)
+    def get_sigma(self) -> float:
+        """
+        Calculates the initial sigma for the SOM as half of the image size
+        :return: Sigma value
+        """
+        return np.ceil(min(self.som_rows, self.som_cols) / 2)
 
-    def get_som_shape(self):
-        return self.current_row_num, self.current_col_num
+    def get_som_shape(self) -> tuple[int, int]:
+        """
+        Returns the shape of the SOM grid
+        :return: A tuple (rows, cols)
+        """
+        return self.som_rows, self.som_cols
 
-    def get_som_weights(self):
+    def get_som_weights(self) -> torch.Tensor:
+        """
+        Returns the current weights of the SOM
+        :return: Tensor of shape ``(som_rows * som_cols, num_patches * embed_dim)``
+        """
         return self.som_weights
 
-    def get_weight_of_node(self, flat_idx):
+    def get_weight_of_node(self, flat_idx: int) -> torch.Tensor:
+        """
+        Returns the weight of the node in the SOM at the given index
+        :param flat_idx: Flat index of the neuron
+        :return: Weight Tensor
+        """
         return self.som_weights[flat_idx]
 
-    def save_mqe(self, som_loss):
-        self.som_loss_history.append(som_loss)
-
-    def find_dissimilar_neighbour(self, e_index, e_index_flat):
+    def find_dissimilar_neighbour(self,
+                                  e_index: tuple[int,int],
+                                  e_index_flat: int) -> tuple[int,int]:
+        """
+        Method to find the most dissimilar neighbour in a rectangular grid to the neuron unit e at given index
+        :param e_index: Index on the 2d grid of the neuron unit e
+        :param e_index_flat: Flat index of the neuron unit e in the Parameter
+        :return: Index of the most dissimilar neighbour d to the unit e
+        """
         e_weight = self.get_weight_of_node(e_index_flat)
         r, c = e_index
         max_dist = -1.0
@@ -277,7 +477,12 @@ class AutoEncoder(nn.Module):
 
         return d_idx
 
-    def add_col_between(self, col1, col2):
+    def add_col_between(self, col1: int, col2: int):
+        """
+        Method which inserts a new column between given column indices
+        :param col1: Index of the first column
+        :param col2: Index of the second column
+        """
         flat_weights = self.som_weights.data
         grid_weights = flat_weights.view(self.current_row_num, self.current_col_num, self.som_dim)
 
@@ -295,8 +500,12 @@ class AutoEncoder(nn.Module):
         self.current_col_num += 1
         self.som_weights = nn.Parameter(new_grid.reshape(-1, self.som_dim))
 
-
-    def add_row_between(self, row1, row2):
+    def add_row_between(self, row1: int, row2: int):
+        """
+        Method which inserts a new row between given row indices
+        :param row1: Index of the first row
+        :param row2: Index of the second row
+        """
         flat_weights = self.som_weights.data
         grid_weights = flat_weights.view(self.current_row_num, self.current_col_num, self.som_dim)
 
@@ -314,7 +523,11 @@ class AutoEncoder(nn.Module):
         self.current_row_num += 1
         self.som_weights = nn.Parameter(new_grid.reshape(-1, self.som_dim))
 
-    def grow(self, unit_error_matrix):
+    def grow(self, unit_error_matrix: np.ndarray):
+        """
+        Method which grows the grid by one row or one column
+        :param unit_error_matrix: Error matrix to find the neuron unit e with the highest error
+        """
         e_index_flat = np.argmax(unit_error_matrix)
         e_index = np.unravel_index(e_index_flat, unit_error_matrix.shape)
 
@@ -327,17 +540,24 @@ class AutoEncoder(nn.Module):
         er, ec = e_index
         dr, dc = d_index
 
-        if er == dr:  # same row
+        if er == dr:  # same row, adding column between their cols
             self.add_col_between(ec, dc)
-        elif ec == dc:  # same col
+        elif ec == dc:  # same col, adding row between their rows
             self.add_row_between(er, dr)
         else:
             raise ValueError("e_unit and d_unit not adjacent")
 
-    def calculate_unit_errors(self, loader, device):
+    def calculate_unit_errors(self,
+                              loader: torch.utils.data.DataLoader,
+                              device: torch.device) -> np.ndarray[np.ndarray[float]]:
+        """
+        Method calculating error for each neuron unit
+        :param loader: Dataloader
+        :param device: The torch device
+        :return: Error for each unit
+        """
 
         unit_errors = np.zeros((self.current_row_num, self.current_col_num))
-        unit_hits = np.zeros((self.current_row_num, self.current_col_num))
 
         total_samples = 0
 
@@ -367,27 +587,19 @@ class AutoEncoder(nn.Module):
                 # if multiple images in same batch hit same neuron, value is added only ones, therefore have to use np.add.at
                 #unit_errors[row_indices, col_indices] += min_dists
                 np.add.at(unit_errors, (row_indices, col_indices), min_dists)
-                #unit_hits[row_indices, col_indices] += 1
-                np.add.at(unit_hits, (row_indices, col_indices), 1)
 
-        unit_hits_mask = unit_hits > 0
-        active_units_count = np.sum(unit_hits_mask)
+        return unit_errors
 
-        # new Global MQE = Total Error / number of samples in dataset
-        # old Global MQE = Total Error / number of active units in the GSOM
-        # ----------------------------------- Different from the papers, needed to state in thesis ------------------------------
-        total_error = np.sum(unit_errors)
-        global_mqe = total_error / total_samples if total_samples > 0 else 0
-        #global_mqe = total_error / active_units_count if active_units_count > 0 else 0
-
-        return unit_errors, global_mqe
-
-    def start_growth(self, loader, device):
+    def start_growth(self, loader: torch.utils.data.DataLoader, device: torch.device):
+        """
+        Method which starts growing grid by one row or one column
+        :param loader: Dataloader
+        :param device: The torch device
+        """
         self.eval()
-        unit_errors, global_mqe = self.calculate_unit_errors(loader, device)
+        unit_errors = self.calculate_unit_errors(loader, device)
 
         self.grow(unit_errors)
         print(f"Current grid size: ({self.current_row_num}, {self.current_col_num})")
         self.to(device)
         self.train()
-        return True
