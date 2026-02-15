@@ -16,7 +16,7 @@ class GHSOM:
                  learning_rate: float = 0.5,
                  beta: float = 0.999,
                  use_qe_for_vertical: bool = True,
-                 min_samples_vertical_grow: int = 5,
+                 min_samples_vertical_grow: int | None = 3,
                  max_gsom_size: int | None = 30,
                  distance_k: int = 2,
                  neighbourhood_function: str = 'gaussian',
@@ -29,7 +29,7 @@ class GHSOM:
         :param learning_rate: Learning rate used for learning. Defaults to ``0.5``.
         :param beta: Beta parameter for the decaying function. For exponential function, the beta must satisfy: 0 < beta < 1, for power function, the beta must satisfy: beta < 0. Defaults to ``0.999``.
         :param use_qe_for_vertical: If qe will be used for training, otherwise mqe, as specified in the research paper. Defaults to ``True``.
-        :param min_samples_vertical_grow: Minimum number of samples required to generate a new GSOM child. Defaults to ``5``.
+        :param min_samples_vertical_grow: Minimum number of samples required to generate a new GSOM child. Defaults to ``3``.
         :param max_gsom_size: Maximum number of neuron units for each GSOM, used to prevent infinite horizontal growth. Defaults to ``30``.
         :param distance_k: k variable from the Minkowski formula. Must be one of ``1`` for Manhattan distance, ``2`` for Euclidean distance, ``np.inf`` for Chebyshev distance, other ``k`` > 2 for generic distance with that k. Defaults to ``2``.
         :param neighbourhood_function: Selection of neighbourhood function for influencing neighbouring neuron units. Must be one of ``gaussian``, ``rectangular``, ``triangular``, ``cosine``. Defaults to ``gaussian``.
@@ -329,7 +329,6 @@ class GHSOM:
         Method to calculate QE, TE and Purity metrics
         :param X: Dataset
         :param y: Target labels
-        :return:
         """
         label_names, y_int = np.unique(y, return_inverse=True)
 
