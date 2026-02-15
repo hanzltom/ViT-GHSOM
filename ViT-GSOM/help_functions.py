@@ -223,7 +223,7 @@ def plot_umap_som_weights(snapshot_som_weights: dict[int: tuple[torch.Tensor, nu
         if np.sum(active_mask) > 0:
             scatter = plt.scatter(embedding[active_mask, 0], embedding[active_mask, 1],
                                   c=labels[active_mask], cmap='tab10')
-            plt.colorbar(scatter, ticks=range(10), label='Digit Class')
+            plt.colorbar(scatter, ticks=range(10), label='Class')
 
         # print empty nodes as black
         if np.sum(~active_mask) > 0:
