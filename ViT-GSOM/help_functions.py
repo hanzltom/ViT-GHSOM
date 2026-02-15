@@ -13,23 +13,13 @@ import matplotlib.patches as mpatches
 Distance functions
 """
 
-def euclidean_distance(a, b, axis):
-    diff = np.abs(a - b)
-    return np.linalg.norm(diff, axis=axis)
-
-def manhattan_distance(a, b, axis):
-    diff = np.abs(a - b)
-    return np.sum(diff, axis=axis)
-
-def chebyshev_distance(a, b, axis):
-    diff = np.abs(a - b)
-    return np.max(diff, axis=axis)
-
-def generic_distance(a, b, axis, k):
-    diff = np.abs(a - b)
-    return np.power(np.sum(np.power(diff, k), axis=axis), 1.0 / k)
-
-def cosine_distance_torch(weights, inputs):
+def cosine_distance_torch(weights: torch.Tensor, inputs: torch.Tensor) -> torch.Tensor:
+    """
+    Function calculating cosine distance between weights and inputs
+    :param weights: SOM weights of shape ``(som_rows * som_cols, num_patches * embed_dim)``
+    :param inputs: Input batch tensor of shape ``(batch_size, n_features)``
+    :return: Distance of shape ``(batch_size, som_rows * som_cols)``
+    """
     # eg. 3x3 grid with weights of dim 4: (3,3,4) -> (9,4)
     if weights.ndim == 3:
         weights_flat = weights.reshape(-1, weights.shape[-1])
@@ -46,84 +36,88 @@ def cosine_distance_torch(weights, inputs):
 
     return 1 - similarity
 
-def cosine_distance_numpy(weights, inputs):
-    # eg. 3x3 grid with weights of dim 4: (3,3,4) -> (9,4)
-    if weights.ndim == 3:
-        weights_flat = weights.reshape(-1, weights.shape[-1])
-    else:
-        weights_flat = weights
-
-    # eg input (4,) -> (1,4)
-    if inputs.ndim == 1:
-        inputs = inputs[np.newaxis, :]
-
-    # input dot weights: (1,4) dot (4,9) = (1,9)
-    divident = np.dot(inputs, weights_flat.T)
-
-    input_norm = np.linalg.norm(inputs,axis=1, keepdims=True) # (1,1)
-    weight_norm = np.linalg.norm(weights_flat,axis=1, keepdims=True) # (9,1)
-    divisor = input_norm * weight_norm.T # (1,1) * (1,9) = (1,9)
-
-
-    similarity = divident / (divisor + 1e-8)
-    return 1 - similarity
-
 
 """
 Neighbourhood distance functions
 """
-def gaussian_neighbourhood_numpy(grid_dists, sigma_t):
-    return np.exp(- (grid_dists ** 2) / (2 * (sigma_t ** 2)))
-
-def gaussian_neighbourhood_torch(grid_dists, sigma_t):
+def gaussian_neighbourhood_torch(grid_dists: torch.Tensor, sigma_t: float) -> torch.Tensor:
+    """
+    Function calculating gaussian neighbourhood influence
+    :param grid_dists: Squared Euclidean distances between the BMU and other neurons of shape ``(batch_size, n_nodes)``
+    :param sigma_t: Current neighbourhood radius
+    :return: Neighbourhood influence tensor of shape ``(batch_size, n_nodes)``
+    """
     return torch.exp(-grid_dists / (2 * sigma_t ** 2))
-
-def rectangular_neighbourhood(grid_dists, sigma_t):
-    return (grid_dists <= sigma_t).astype(float)
-
-def triangular_neighbourhood(grid_dists, sigma_t):
-    return np.maximum(0.0, 1.0 - (grid_dists / sigma_t))
-
-def cosine_down_to_zero_neighbourhood(grid_dists, sigma_t):
-    influence = np.zeros_like(grid_dists)
-    mask = grid_dists <= 2 * sigma_t
-
-    influence[mask] = (np.cos((np.pi * grid_dists[mask]) / (2 * sigma_t)) + 1) / 2.0
-    return influence
 
 
 """
 Decay function
 """
 
-def decay_exponential(initial_value, beta, t):
+def decay_exponential(initial_value: float, beta: float, t: int) -> float:
+    """
+    Decay exponential function
+    :param initial_value: Initial value
+    :param beta: Beta value, must satisfy: 0 < beta < 1
+    :param t: Current time
+    :return: Decayed initial value
+    """
     return initial_value * (beta ** t)
 
 
-def decay_power(initial_value, beta, t):
+def decay_power(initial_value: float, beta: float, t: int) -> float:
+    """
+    Decay power function
+    :param initial_value: Initial value
+    :param beta: Beta value, must satisfy: beta < 0
+    :param t: Current time
+    :return: Decayed initial value
+    """
     return initial_value * (t ** beta)
 
 """
 Other functions
 """
-def get_grid_coords(row_num, col_num, device):
+def get_grid_coords(row_num: int, col_num: int, device: torch.device | str) -> torch.Tensor:
+    """
+    Function calculating grid of 2D coordinates for the SOM
+    :param row_num: Number of rows in the SOM grid
+    :param col_num: Number of columns in the SOM grid
+    :param device: The torch device
+    :return: Grid coordinates of shape ``(row_num * col_num, 2)``.
+    """
     y_coords, x_coords = torch.meshgrid(
 torch.arange(row_num, dtype=torch.float32),
         torch.arange(col_num, dtype=torch.float32),
         indexing='ij'
     )
 
-    # coords are 2 dim tensors, we stack them over new dimension to shape (nrows, ncol, 2)
+    # coords are 2 dim tensors, we stack them over new dimension to shape (row_num, col_num, 2)
     # reshape them to shape (num_units, 2)
     coords = torch.stack((x_coords, y_coords), dim=-1).reshape(-1, 2)
     return coords.to(device)
 
-def calculate_purity(model, loader, device):
-# https://stackoverflow.com/questions/34047540/python-clustering-purity-metric
+
+def calculate_QE_TE_Purity(model: 'AutoEncoder',
+                           loader: torch.utils.data.DataLoader,
+                           device: torch.device) -> dict[str: float]:
+    """
+    Function calculating QE, TE and Purity metrics for model evaluation
+    :param model: Trained ViT-SOM Autoencoder
+    :param loader: Dataloader
+    :param device: The torch device
+    :return: A tuple containing (QE, TE, Purity)
+    """
+    # https://stackoverflow.com/questions/34047540/python-clustering-purity-metric
     model.eval()
     true_label = []
     cluster_labels = []
+    total_qe = 0.0
+    total_te = 0.0
+    total_samples = 0
 
+    rows, cols = model.get_som_shape()
+    grid_coords = get_grid_coords(rows, cols, device)
     with torch.no_grad():
         for images, labels in loader:
             images = images.to(device)
@@ -133,27 +127,57 @@ def calculate_purity(model, loader, device):
 
             # extract cls token with sequence of patches - not needed
             # shape (batch, embed_dim)
-            #latent = latent[:,0,:]
-            patches = latent[:, 1:, :] 
-            
-            # 2. Flatten: (Batch, 784)
+            patches = latent[:, 1:, :]
+
+            # flatten to create som input
             som_input = patches.reshape(patches.shape[0], -1)
 
             # calculate distance, shape (batch, neuron unit num)
             dists = cosine_distance_torch(model.get_som_weights(), som_input)
+            min_dists, bmu_indices = torch.min(dists, dim=1)
 
-            bmu_indices = torch.argmin(dists, dim=1)
-            true_label.append(labels)
-            cluster_labels.append(bmu_indices)
+            # QE
+            total_qe += torch.sum(min_dists).item()
+
+            # TE
+            _, top2_indices = torch.topk(dists, k=2, dim=1, largest=False)
+            bmu1_idx = top2_indices[:, 0]
+            bmu2_idx = top2_indices[:, 1]
+
+            bmu1_coords = grid_coords[bmu1_idx]
+            bmu2_coords = grid_coords[bmu2_idx]
+
+            grid_dists = torch.cdist(bmu1_coords, bmu2_coords)
+            total_te += torch.sum(grid_dists > np.sqrt(2)).item()
+
+            # Purity
+            true_label.append(labels.cpu())
+            cluster_labels.append(bmu_indices.cpu())
+
+            total_samples += dists.shape[0]
+
+    output = {}
+    output["QE"] = total_qe / total_samples if total_samples > 0 else 0
+    output["TE"] = total_te / total_samples if total_samples > 0 else 0
 
     true_labels_np = torch.cat(true_label).cpu().numpy()
     cluster_labels_np = torch.cat(cluster_labels).cpu().numpy()
-    
     contingency_matrix = metrics.cluster.contingency_matrix(true_labels_np, cluster_labels_np)
-    return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
+    output["Purity"] = np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
+
+    return output
 
 
-def get_node_labels(model, loader, device):
+def get_node_labels(model: 'AutoEncoder',
+                           loader: torch.utils.data.DataLoader,
+                           device: torch.device) -> np.ndarray:
+    """
+    Function which calculates the majority class for each neuron on the grid
+    :param model: ViT-SOM Autoencoder
+    :param loader: Dataloader
+    :param device: The torch device
+    :return: Numpy array with the label of the majority class of shape ``(n_nodes,)``
+    """
     rows, cols = model.get_som_shape()
     num_nodes = rows * cols
 
@@ -184,23 +208,28 @@ def get_node_labels(model, loader, device):
 
     return node_labels
 
-def plot_umap_som_weights(snapshot_som_weights):
+def plot_umap_som_weights(snapshot_som_weights: dict[int: tuple[torch.Tensor, numpy.ndarray]]):
+    """
+    Functions which plots the SOM weights for different epochs using UMAP visualization
+    :param snapshot_som_weights: Dictionary containing snapshot of CLS tokens for different epochs
+    """
     for epoch, (weights, labels) in snapshot_som_weights.items():
         reducer = umap.UMAP(n_neighbors=20, min_dist=0.1, metric='cosine', random_state=42)
         embedding = reducer.fit_transform(weights)
         active_mask = labels != -1
 
         plt.figure(figsize=(10, 8))
+        # plot active nodes
         if np.sum(active_mask) > 0:
             scatter = plt.scatter(embedding[active_mask, 0], embedding[active_mask, 1],
                                   c=labels[active_mask], cmap='tab10')
             plt.colorbar(scatter, ticks=range(10), label='Digit Class')
 
+        # print empty nodes as black
         if np.sum(~active_mask) > 0:
-            plt.scatter(embedding[~active_mask, 0], embedding[~active_mask, 1],
-                        c='black', label='Dead Units')
+            plt.scatter(embedding[~active_mask, 0], embedding[~active_mask, 1], c='black')
 
-        plt.title(f"SOM wights, epoch {epoch}")
+        plt.title(f"SOM weights, epoch {epoch}")
         plt.show()
 
 
