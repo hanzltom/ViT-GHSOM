@@ -11,7 +11,7 @@ from typing import Callable
 Distance functions
 """
 
-def euclidean_distance(a: np.ndarray, b: np.ndarray, axis: int) -> float:
+def euclidean_distance(a: np.ndarray, b: np.ndarray, axis: int | None) -> np.ndarray:
     """
     Euclidean distance between two vectors.
     :param a: Vector a
@@ -22,7 +22,7 @@ def euclidean_distance(a: np.ndarray, b: np.ndarray, axis: int) -> float:
     diff = np.abs(a - b)
     return np.linalg.norm(diff, axis=axis)
 
-def manhattan_distance(a: np.ndarray, b: np.ndarray, axis: int) -> float:
+def manhattan_distance(a: np.ndarray, b: np.ndarray, axis: int | None) -> np.ndarray:
     """
     Manhattan distance between two vectors.
     :param a: Vector a
@@ -33,7 +33,7 @@ def manhattan_distance(a: np.ndarray, b: np.ndarray, axis: int) -> float:
     diff = np.abs(a - b)
     return np.sum(diff, axis=axis)
 
-def chebyshev_distance(a: np.ndarray, b: np.ndarray, axis: int) -> float:
+def chebyshev_distance(a: np.ndarray, b: np.ndarray, axis: int | None) -> np.ndarray:
     """
     Chebyshev distance between two vectors.
     :param a: Vector a
@@ -44,7 +44,7 @@ def chebyshev_distance(a: np.ndarray, b: np.ndarray, axis: int) -> float:
     diff = np.abs(a - b)
     return np.max(diff, axis=axis)
 
-def generic_distance(a: np.ndarray, b: np.ndarray, axis: int, k: int) -> float:
+def generic_distance(a: np.ndarray, b: np.ndarray, axis: int, k: int | None) -> np.ndarray:
     """
     Generic distance from Minskowski distance functions
     :param a: Vector a
