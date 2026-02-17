@@ -309,32 +309,42 @@ def plot_umap_som_weights(snapshot_som_weights: dict[int: tuple[torch.Tensor, nu
         plt.title(f"SOM weights, epoch {epoch}")
         plt.show()
 
-def plot_som_weights(snapshot_som_weights: dict[int: tuple[torch.Tensor, numpy.ndarray]],
+def plot_som_weights(snapshot_som_weights,
                      som_rows: int,
-                     som_cols: int):
+                     som_cols: int,
+                     unique_labels: set):
     """
     Functions which plots the SOM weights for different epochs
     :param snapshot_som_weights: Dictionary containing snapshot of CLS tokens for different epochs
     :param som_rows: Number of rows on the grid
-    :param som_cols: Number of columns on the grid
+    :param som_cols: Number of columns on the grid,
+    :param unique_labels: Set with all unique labels
     """
+
+    # define colors
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
+                     'tab:olive', 'tab:cyan', 'tab:gray']
+    cmap = colors.ListedColormap(color_options)
+    cmap.set_bad(color='black')
+
     for epoch, (weights, labels) in snapshot_som_weights.items():
-
         matrix = labels.reshape(som_rows, som_cols)
-        labels_unique = np.unique(labels)
-        # define colors
-        color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
-                         'tab:olive', 'tab:cyan', 'tab:gray']
-        cmap = colors.ListedColormap(color_options[:labels_unique])
-        cmap.set_bad(color='black')
-
+        masked_matrix = np.ma.masked_where(matrix == -1, matrix)
+        
         # create figure
         fig, ax = plt.subplots(figsize=(8, 8))
-        ax.imshow(matrix, cmap=cmap)
+        ax.imshow(masked_matrix, cmap=cmap, vmin=0, vmax=9)
         ax.set_title(f"Epoch: {epoch}")
 
         # create patches for the legend
-        patches = [mpatches.Patch(color=color_options[i], label=label) for i, label in enumerate(labels_unique)]
-        patches.append(mpatches.Patch(color='black', label='Empty'))
+        patches = []
+        for label in unique_labels:
+            if label == -1:
+                # add empty black node
+                patches.append(mpatches.Patch(color='black', label='Empty'))
+            else:
+                color_idx = int(label) % len(color_options)
+                patches.append(mpatches.Patch(color=color_options[color_idx], label=f"Class {label}"))
+        
         ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.show()
