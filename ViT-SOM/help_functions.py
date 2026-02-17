@@ -293,6 +293,9 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
     """
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
                      'tab:olive', 'tab:cyan', 'tab:gray']
+    cmap = colors.ListedColormap(color_options)
+    cmap.set_bad(color='black')
+    
     unique_labels.update([-1])
     
     for epoch, (weights, labels) in snapshot_som_weights.items():
@@ -304,8 +307,7 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
         # plot active nodes
         if np.sum(active_mask) > 0:
             scatter = plt.scatter(embedding[active_mask, 0], embedding[active_mask, 1],
-                                  c=labels[active_mask], cmap='tab10')
-            #plt.colorbar(scatter, ticks=range(10), label='Digit Class')
+                                  c=labels[active_mask], cmap=cmap)
 
         # print empty nodes as black
         if np.sum(~active_mask) > 0:

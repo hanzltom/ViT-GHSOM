@@ -216,6 +216,9 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
     """
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
                      'tab:olive', 'tab:cyan', 'tab:gray']
+    cmap = colors.ListedColormap(color_options)
+    cmap.set_bad(color='black')
+    
     unique_labels.update([-1])
     
     for epoch, (weights, labels) in snapshot_som_weights.items():
@@ -227,8 +230,7 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
         # plot active nodes
         if np.sum(active_mask) > 0:
             scatter = plt.scatter(embedding[active_mask, 0], embedding[active_mask, 1],
-                                  c=labels[active_mask], cmap='tab10')
-            #plt.colorbar(scatter, ticks=range(10), label='Digit Class')
+                                  c=labels[active_mask], cmap=cmap)
 
         # print empty nodes as black
         if np.sum(~active_mask) > 0:
@@ -248,9 +250,7 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
         plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.title(f"SOM weights (UMAP), epoch {epoch}")
         plt.show()
-
-
-
+        
 def plot_som_weights(snapshot_som_weights,
                      som_rows: int,
                      som_cols: int,
@@ -268,6 +268,7 @@ def plot_som_weights(snapshot_som_weights,
                      'tab:olive', 'tab:cyan', 'tab:gray']
     cmap = colors.ListedColormap(color_options)
     cmap.set_bad(color='black')
+    unique_labels.update([-1])
 
     for epoch, (weights, labels) in snapshot_som_weights.items():
         matrix = labels.reshape(som_rows, som_cols)
@@ -276,7 +277,7 @@ def plot_som_weights(snapshot_som_weights,
         # create figure
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.imshow(masked_matrix, cmap=cmap, vmin=0, vmax=9)
-        ax.set_title(f"Epoch: {epoch}")
+        ax.set_title(f"SOM weights, Epoch: {epoch}")
 
         # create patches for the legend
         patches = []
