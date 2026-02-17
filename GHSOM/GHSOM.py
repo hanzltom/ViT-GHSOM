@@ -339,6 +339,7 @@ class GHSOM:
         total_samples_processed = 0
         true_labels = []
         cluster_labels = []
+        total_neuron_num = 0
 
         # BFS
         while queue:
@@ -379,10 +380,14 @@ class GHSOM:
                         # add cluter label for every sample in this leaf node
                         cluster_labels.extend([unit_id] * len(subset_y))
 
+                        total_neuron_num += 1
+
         self.QE = total_global_qe / X.shape[0] if X.shape[0] > 0 else 0
         self.TE = total_weighted_te / total_samples_processed if total_samples_processed > 0 else 0
         contingency_matrix = metrics.cluster.contingency_matrix(true_labels, cluster_labels)
         self.purity =  np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
+
+        print(f"GHSOM results: Number of neurons: {total_neuron_num}, QE: {self.QE}, TE: {self.TE}, Purity: {self.purity}")
 
 
 
