@@ -310,6 +310,7 @@ def plot_ghsom(ghsom_instance: "GHSOM", X: np.ndarray, y: np.ndarray):
     ax.axis('off')
     ax.set_title(f"GHSOM Structure (Max Depth: {max_depth})")
     patches = [mpatches.Patch(color=label_to_color[l], label=l) for l in unique_labels]
+    patches.append(mpatches.Patch(color=label_to_color["Empty"], label='Empty'))
     ax.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
     plt.show()
 
