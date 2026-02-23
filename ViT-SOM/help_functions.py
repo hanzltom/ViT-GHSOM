@@ -395,3 +395,41 @@ def plot_som_pie_grid(snapshot_som_weights,
     fig.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.suptitle(f"SOM Node Class Distributions ({som_rows}x{som_cols})", fontsize=16)
     plt.show()
+
+def plot_som_mnist(snapshot_som_weights: np.ndarray, som_rows: int, som_cols: int):
+
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
+                     'tab:olive', 'tab:cyan', 'tab:gray']
+    
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    node_hits = snapshot_som_weights[list(snapshot_som_weights.keys())[-1]][1]
+
+    node_labels = np.argmax(node_hits, axis=1)
+
+    # units with no votes
+    total_hits = np.sum(node_hits, axis=1)
+    node_labels[total_hits == 0] = -1
+
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+    
+    ax.set_xlim(0, som_cols)
+    ax.set_ylim(0, som_rows)
+    ax.invert_yaxis()
+    
+    for i in range(som_rows * som_cols):
+        label = node_labels[i]
+        
+        if label != -1:
+            row = i // som_cols
+            col = i % som_cols
+            
+            center_x = col + 0.5
+            center_y = row + 0.5
+            c = color_options[int(label) % len(color_options)]
+            
+            ax.text(center_x, center_y, str(label), color=c, fontdict={'weight': 'bold', 'size': 12})
+    
+    plt.title(f"SOM Majority Classes ({som_rows}x{som_cols})")
+    plt.show()
