@@ -8,6 +8,8 @@ import umap
 import matplotlib.pyplot as plt
 from matplotlib import colors
 import matplotlib.patches as mpatches
+import matplotlib.gridspec as gridspec
+
 
 """
 Distance functions
@@ -147,8 +149,8 @@ def calculate_QE_TE_Purity(model: 'AutoEncoder',
             bmu1_coords = grid_coords[bmu1_idx]
             bmu2_coords = grid_coords[bmu2_idx]
 
-            grid_dists = torch.cdist(bmu1_coords, bmu2_coords)
-            total_te += torch.sum(grid_dists > np.sqrt(2)).item()
+            grid_dists = torch.norm(bmu1_coords - bmu2_coords, p=2, dim=1)
+            total_te += torch.sum(grid_dists > 1.42).item()
 
             # Purity
             true_label.append(labels.cpu())
@@ -168,16 +170,18 @@ def calculate_QE_TE_Purity(model: 'AutoEncoder',
     return output
 
 
-def get_node_labels(model: 'AutoEncoder',
+
+def get_node_hits(model: 'AutoEncoder',
                            loader: torch.utils.data.DataLoader,
                            device: torch.device) -> np.ndarray:
     """
-    Function which calculates the majority class for each neuron on the grid
+    Function which calculates the number of times each neuron on the grid becomes a BMU
     :param model: ViT-SOM Autoencoder
     :param loader: Dataloader
     :param device: The torch device
-    :return: Numpy array with the label of the majority class of shape ``(n_nodes,)``
+    :return: Numpy array with the number of hits for each neuron of shape ``(n_nodes,number of unique labels)``
     """
+    model.eval()
     rows, cols = model.get_som_shape()
     num_nodes = rows * cols
 
@@ -196,41 +200,39 @@ def get_node_labels(model: 'AutoEncoder',
         bmu_indices = torch.argmin(dists, dim=1).cpu().numpy()
 
         # add vote to neuron
-        for i, bmu_idx in enumerate(bmu_indices):
-            node_hits[bmu_idx, labels[i]] += 1
+        np.add.at(node_hits, (bmu_indices, labels), 1)
 
-    # get label with max votes
-    node_labels = np.argmax(node_hits, axis=1)
 
-    # units with no votes
-    total_hits = np.sum(node_hits, axis=1)
-    node_labels[total_hits == 0] = -1
-
-    return node_labels
+    return node_hits
 
 def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
     """
-    Functions which plots the SOM weights for different epochs using UMAP visualization
-    :param snapshot_som_weights: Dictionary containing snapshot of CLS tokens for different epochs
+    Function which plots the SOM weights for different epochs using UMAP visualization
+    :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
     :param unique_labels: Set with all unique labels
     """
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
                      'tab:olive', 'tab:cyan', 'tab:gray']
     cmap = colors.ListedColormap(color_options)
     cmap.set_bad(color='black')
-    
-    unique_labels.update([-1])
-    
-    for epoch, (weights, labels) in snapshot_som_weights.items():
-        reducer = umap.UMAP(n_neighbors=20, min_dist=0.1, metric='cosine', random_state=42)
+        
+    for epoch, (weights, node_hits) in snapshot_som_weights.items():
+        # get label with max votes
+        node_labels = np.argmax(node_hits, axis=1)
+
+        # units with no votes
+        total_hits = np.sum(node_hits, axis=1)
+        node_labels[total_hits == 0] = -1
+
+        reducer = umap.UMAP(n_neighbors=20, min_dist=0.1, metric='cosine', random_state=42, n_jobs=1)
         embedding = reducer.fit_transform(weights)
-        active_mask = labels != -1
+        active_mask = node_labels != -1
 
         plt.figure(figsize=(10, 8))
         # plot active nodes
         if np.sum(active_mask) > 0:
             scatter = plt.scatter(embedding[active_mask, 0], embedding[active_mask, 1],
-                                  c=labels[active_mask], cmap=cmap)
+                                  c=node_labels[active_mask], cmap=cmap)
 
         # print empty nodes as black
         if np.sum(~active_mask) > 0:
@@ -238,17 +240,11 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
 
         
         # create patches for the legend
-        patches = []
-        for label in unique_labels:
-            if label == -1:
-                # add empty black node
-                patches.append(mpatches.Patch(color='black', label='Empty'))
-            else:
-                color_idx = int(label) % len(color_options)
-                patches.append(mpatches.Patch(color=color_options[color_idx], label=f"Class {label}"))
+        patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
+        patches.append(mpatches.Patch(color='black', label='Empty'))
         
         plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.title(f"SOM weights (UMAP), epoch {epoch}")
+        plt.title(f"SOM UMAP weights with majority class, epoch {epoch}")
         plt.show()
         
 def plot_som_weights(snapshot_som_weights,
@@ -256,8 +252,8 @@ def plot_som_weights(snapshot_som_weights,
                      som_cols: int,
                      unique_labels: set):
     """
-    Functions which plots the SOM weights for different epochs
-    :param snapshot_som_weights: Dictionary containing snapshot of CLS tokens for different epochs
+    Function which plots the SOM weights for different epochs
+    :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
     :param som_rows: Number of rows on the grid
     :param som_cols: Number of columns on the grid,
     :param unique_labels: Set with all unique labels
@@ -268,27 +264,109 @@ def plot_som_weights(snapshot_som_weights,
                      'tab:olive', 'tab:cyan', 'tab:gray']
     cmap = colors.ListedColormap(color_options)
     cmap.set_bad(color='black')
-    unique_labels.update([-1])
 
-    for epoch, (weights, labels) in snapshot_som_weights.items():
-        matrix = labels.reshape(som_rows, som_cols)
+    for epoch, (weights, node_hits) in snapshot_som_weights.items():
+        # get label with max votes
+        node_labels = np.argmax(node_hits, axis=1)
+
+        # units with no votes
+        total_hits = np.sum(node_hits, axis=1)
+        node_labels[total_hits == 0] = -1
+        
+        matrix = node_labels.reshape(som_rows, som_cols)
         masked_matrix = np.ma.masked_where(matrix == -1, matrix)
         
         # create figure
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.imshow(masked_matrix, cmap=cmap, vmin=0, vmax=9)
-        ax.set_title(f"SOM weights, Epoch: {epoch}")
+        ax.set_title(f"SOM nodes with majority class, epoch: {epoch}")
 
         # create patches for the legend
-        patches = []
-        for label in unique_labels:
-            if label == -1:
-                # add empty black node
-                patches.append(mpatches.Patch(color='black', label='Empty'))
-            else:
-                color_idx = int(label) % len(color_options)
-                patches.append(mpatches.Patch(color=color_options[color_idx], label=f"Class {label}"))
-        
+        patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
+        patches.append(mpatches.Patch(color='black', label='Empty'))
+    
         ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.show()
 
+def plot_som_pie_grid(snapshot_som_weights, 
+                      som_rows: int, 
+                      som_cols: int, 
+                      unique_labels: int):
+    """
+    Function which plots the SOM grid with its class distributions
+    :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
+    :param som_rows: Number of rows on the grid
+    :param som_cols: Number of columns on the grid,
+    :param unique_labels: Set with all unique labels
+    """
+    
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
+                     'tab:olive', 'tab:cyan', 'tab:gray']
+    
+    fig = plt.figure(figsize=(10, 10))
+    the_grid = gridspec.GridSpec(som_rows, som_cols, fig)
+
+    node_hits = snapshot_som_weights[list(snapshot_som_weights.keys())[-1]][1]
+
+    for i in range(som_rows * som_cols):   
+        row = i // som_cols
+        col = i % som_cols     
+        counts = node_hits[i]
+        
+        ax = plt.subplot(the_grid[row, col])
+
+        if np.sum(counts) == 0:
+            ax.pie([1], colors=['black'])
+        else:
+            ax.pie(counts, colors=color_options[:len(unique_labels)])
+
+    patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
+    patches.append(mpatches.Patch(color='black', label='Empty'))
+    
+    fig.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.suptitle(f"SOM nodes with class distributions ({som_rows}x{som_cols})", fontsize=16)
+    plt.show()
+
+def plot_som_mnist(snapshot_som_weights: np.ndarray, som_rows: int, som_cols: int):
+    """
+    Function for MNIST dataset which plots the SOM grid with the majority label as a text
+    :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
+    :param som_rows: Number of rows on the grid
+    :param som_cols: Number of columns on the grid,
+    """
+
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
+                     'tab:olive', 'tab:cyan', 'tab:gray']
+    
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    node_hits = snapshot_som_weights[list(snapshot_som_weights.keys())[-1]][1]
+
+    node_labels = np.argmax(node_hits, axis=1)
+
+    # units with no votes
+    total_hits = np.sum(node_hits, axis=1)
+    node_labels[total_hits == 0] = -1
+
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+    
+    ax.set_xlim(0, som_cols)
+    ax.set_ylim(0, som_rows)
+    ax.invert_yaxis()
+    
+    for i in range(som_rows * som_cols):
+        label = node_labels[i]
+        
+        if label != -1:
+            row = i // som_cols
+            col = i % som_cols
+            
+            center_x = col + 0.5
+            center_y = row + 0.5
+            c = color_options[int(label) % len(color_options)]
+            
+            ax.text(center_x, center_y, str(label), color=c, fontdict={'weight': 'bold', 'size': 12})
+    
+    plt.title(f"SOM nodes with majority class ({som_rows}x{som_cols})")
+    plt.show()
