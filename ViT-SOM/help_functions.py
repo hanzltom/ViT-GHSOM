@@ -172,80 +172,6 @@ def calculate_QE_TE_Purity(model: 'AutoEncoder',
     return output
 
 
-def capture_latent(model: 'AutoEncoder',
-                           loader: torch.utils.data.DataLoader,
-                           device: torch.device) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Functions which captures current latent embedding for visualization
-    :param model: ViT-SOM Autoencoder
-    :param loader: Dataloader
-    :param device: The torch device
-    :return: A tuple containing:
-             - X_patches: Flattened patch embeddings of shape ``(n_samples, num_patches * embed_dim)``
-             - X_cls: CLS token embeddings of shape ``(n_samples, embed_dim)``
-             - y: Target labels of shape ``(n_samples,)``
-    """
-    model.eval()
-    labels_vector = []
-    latent_vectors = []
-    cls_vectors = []
-
-    with torch.no_grad():
-        for images, labels in loader:
-            images = images.to(device)
-            
-            _, latent = model(images)
-            cls_token = latent[:, 0, :]
-            latent = latent[:,1:,:]
-            
-            # (Batch, 49, 16) -> (Batch, 784)
-            latent = latent.reshape(latent.shape[0], -1)
-            
-            cls_vectors.append(cls_token.cpu().numpy())
-            latent_vectors.append(latent.cpu().numpy())
-            labels_vector.append(labels.cpu().numpy())
-
-    X_patches = np.concatenate(latent_vectors, axis=0)
-    X_cls = np.concatenate(cls_vectors, axis=0)
-    y = np.concatenate(labels_vector, axis=0)
-
-    model.train()
-
-    return X_patches, X_cls, y
-
-
-def plot_umap_patches(snapshot: dict[int: tuple[torch.Tensor, torch.Tensor]]):
-    """
-    Functions which plots the patches for different epochs using UMAP visualization
-    :param snapshot: Dictionary containing snapshot of patches for different epochs
-    """
-    for epoch, (patches,y) in snapshot.items():
-
-        reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='cosine', random_state=42)
-        embedding = reducer.fit_transform(patches)
-
-        plt.figure(figsize=(10, 8))
-        scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=y, cmap='tab10')
-        plt.colorbar(scatter, ticks=range(10), label='Digit Class')
-        plt.title(f"UMAP patches, epoch: {epoch}")
-        plt.show()
-
-def plot_umap_cls(snapshot: dict[int: tuple[torch.Tensor, torch.Tensor]]):
-    """
-    Functions which plots the CLS tokens for different epochs using UMAP visualization
-    :param snapshot: Dictionary containing snapshot of CLS tokens for different epochs
-    """
-    for epoch, (cls, y) in snapshot.items():
-
-        reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='cosine', random_state=42)
-        embedding = reducer.fit_transform(cls)
-
-        plt.figure(figsize=(10, 8))
-        scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=y, cmap='tab10')
-        plt.colorbar(scatter, ticks=range(10), label='Digit Class')
-        plt.title(f"UMAP CLS token, epoch: {epoch}")
-        plt.show()
-
 
 def get_node_hits(model: 'AutoEncoder',
                            loader: torch.utils.data.DataLoader,
@@ -283,7 +209,7 @@ def get_node_hits(model: 'AutoEncoder',
 
 def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
     """
-    Functions which plots the SOM weights for different epochs using UMAP visualization
+    Function which plots the SOM weights for different epochs using UMAP visualization
     :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
     :param unique_labels: Set with all unique labels
     """
@@ -300,7 +226,7 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
         total_hits = np.sum(node_hits, axis=1)
         node_labels[total_hits == 0] = -1
 
-        reducer = umap.UMAP(n_neighbors=20, min_dist=0.1, metric='cosine', random_state=42)
+        reducer = umap.UMAP(n_neighbors=20, min_dist=0.1, metric='cosine', random_state=42, n_jobs=1)
         embedding = reducer.fit_transform(weights)
         active_mask = node_labels != -1
 
@@ -328,7 +254,7 @@ def plot_som_weights(snapshot_som_weights,
                      som_cols: int,
                      unique_labels: set):
     """
-    Functions which plots the SOM weights for different epochs
+    Function which plots the SOM weights for different epochs
     :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
     :param som_rows: Number of rows on the grid
     :param som_cols: Number of columns on the grid,
@@ -357,17 +283,24 @@ def plot_som_weights(snapshot_som_weights,
         ax.imshow(masked_matrix, cmap=cmap, vmin=0, vmax=9)
         ax.set_title(f"SOM nodes with majority class, epoch: {epoch}")
 
-    # create patches for the legend
-    patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
-    patches.append(mpatches.Patch(color='black', label='Empty'))
+        # create patches for the legend
+        patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
+        patches.append(mpatches.Patch(color='black', label='Empty'))
     
-    ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.show()
+        ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.show()
 
 def plot_som_pie_grid(snapshot_som_weights, 
                       som_rows: int, 
                       som_cols: int, 
-                      unique_labels: int = 10):
+                      unique_labels: int):
+    """
+    Function which plots the SOM grid with its class distributions
+    :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
+    :param som_rows: Number of rows on the grid
+    :param som_cols: Number of columns on the grid,
+    :param unique_labels: Set with all unique labels
+    """
     
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
                      'tab:olive', 'tab:cyan', 'tab:gray']
@@ -397,6 +330,12 @@ def plot_som_pie_grid(snapshot_som_weights,
     plt.show()
 
 def plot_som_mnist(snapshot_som_weights: np.ndarray, som_rows: int, som_cols: int):
+    """
+    Function for MNIST dataset which plots the SOM grid with the majority label as a text
+    :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
+    :param som_rows: Number of rows on the grid
+    :param som_cols: Number of columns on the grid,
+    """
 
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
                      'tab:olive', 'tab:cyan', 'tab:gray']
