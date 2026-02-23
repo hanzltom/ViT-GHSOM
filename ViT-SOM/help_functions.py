@@ -10,6 +10,8 @@ import umap
 import matplotlib.pyplot as plt
 from matplotlib import colors
 import matplotlib.patches as mpatches
+import matplotlib.gridspec as gridspec
+
 
 """
 Distance functions
@@ -362,3 +364,34 @@ def plot_som_weights(snapshot_som_weights,
     ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.show()
 
+def plot_som_pie_grid(snapshot_som_weights, 
+                      som_rows: int, 
+                      som_cols: int, 
+                      unique_labels: int = 10):
+    
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
+                     'tab:olive', 'tab:cyan', 'tab:gray']
+    
+    fig = plt.figure(figsize=(10, 10))
+    the_grid = gridspec.GridSpec(som_rows, som_cols, fig)
+
+    node_hits = snapshot_som_weights[list(snapshot_som_weights.keys())[-1]][1]
+
+    for i in range(som_rows * som_cols):   
+        row = i // som_cols
+        col = i % som_cols     
+        counts = node_hits[i]
+        
+        ax = plt.subplot(the_grid[row, col])
+
+        if np.sum(counts) == 0:
+            ax.pie([1], colors=['black'])
+        else:
+            ax.pie(counts, colors=color_options[:len(unique_labels)])
+
+    patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
+    patches.append(mpatches.Patch(color='black', label='Empty'))
+    
+    fig.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.suptitle(f"SOM Node Class Distributions ({som_rows}x{som_cols})", fontsize=16)
+    plt.show()
