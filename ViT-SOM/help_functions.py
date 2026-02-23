@@ -245,15 +245,15 @@ def plot_umap_cls(snapshot: dict[int: tuple[torch.Tensor, torch.Tensor]]):
         plt.show()
 
 
-def get_node_labels(model: 'AutoEncoder',
+def get_node_hits(model: 'AutoEncoder',
                            loader: torch.utils.data.DataLoader,
                            device: torch.device) -> np.ndarray:
     """
-    Function which calculates the majority class for each neuron on the grid
+    Function which calculates the number of times each neuron on the grid becomes a BMU
     :param model: ViT-SOM Autoencoder
     :param loader: Dataloader
     :param device: The torch device
-    :return: Numpy array with the label of the majority class of shape ``(n_nodes,)``
+    :return: Numpy array with the number of hits for each neuron of shape ``(n_nodes,number of unique labels)``
     """
     model.eval()
     rows, cols = model.get_som_shape()
@@ -276,38 +276,37 @@ def get_node_labels(model: 'AutoEncoder',
         # add vote to neuron
         np.add.at(node_hits, (bmu_indices, labels), 1)
 
-    # get label with max votes
-    node_labels = np.argmax(node_hits, axis=1)
 
-    # units with no votes
-    total_hits = np.sum(node_hits, axis=1)
-    node_labels[total_hits == 0] = -1
-
-    return node_labels
+    return node_hits
 
 def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
     """
     Functions which plots the SOM weights for different epochs using UMAP visualization
-    :param snapshot_som_weights: Dictionary containing snapshot of CLS tokens for different epochs
+    :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
     :param unique_labels: Set with all unique labels
     """
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
                      'tab:olive', 'tab:cyan', 'tab:gray']
     cmap = colors.ListedColormap(color_options)
     cmap.set_bad(color='black')
-    
-    unique_labels.update([-1])
-    
-    for epoch, (weights, labels) in snapshot_som_weights.items():
+        
+    for epoch, (weights, node_hits) in snapshot_som_weights.items():
+        # get label with max votes
+        node_labels = np.argmax(node_hits, axis=1)
+
+        # units with no votes
+        total_hits = np.sum(node_hits, axis=1)
+        node_labels[total_hits == 0] = -1
+
         reducer = umap.UMAP(n_neighbors=20, min_dist=0.1, metric='cosine', random_state=42)
         embedding = reducer.fit_transform(weights)
-        active_mask = labels != -1
+        active_mask = node_labels != -1
 
         plt.figure(figsize=(10, 8))
         # plot active nodes
         if np.sum(active_mask) > 0:
             scatter = plt.scatter(embedding[active_mask, 0], embedding[active_mask, 1],
-                                  c=labels[active_mask], cmap=cmap)
+                                  c=node_labels[active_mask], cmap=cmap)
 
         # print empty nodes as black
         if np.sum(~active_mask) > 0:
@@ -315,14 +314,8 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
 
         
         # create patches for the legend
-        patches = []
-        for label in unique_labels:
-            if label == -1:
-                # add empty black node
-                patches.append(mpatches.Patch(color='black', label='Empty'))
-            else:
-                color_idx = int(label) % len(color_options)
-                patches.append(mpatches.Patch(color=color_options[color_idx], label=f"Class {label}"))
+        patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
+        patches.append(mpatches.Patch(color='black', label='Empty'))
         
         plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.title(f"SOM weights (UMAP), epoch {epoch}")
@@ -334,7 +327,7 @@ def plot_som_weights(snapshot_som_weights,
                      unique_labels: set):
     """
     Functions which plots the SOM weights for different epochs
-    :param snapshot_som_weights: Dictionary containing snapshot of CLS tokens for different epochs
+    :param snapshot_som_weights: Dictionary containing snapshot of SOM weights for different epochs
     :param som_rows: Number of rows on the grid
     :param som_cols: Number of columns on the grid,
     :param unique_labels: Set with all unique labels
@@ -345,10 +338,16 @@ def plot_som_weights(snapshot_som_weights,
                      'tab:olive', 'tab:cyan', 'tab:gray']
     cmap = colors.ListedColormap(color_options)
     cmap.set_bad(color='black')
-    unique_labels.update([-1])
 
-    for epoch, (weights, labels) in snapshot_som_weights.items():
-        matrix = labels.reshape(som_rows, som_cols)
+    for epoch, (weights, node_hits) in snapshot_som_weights.items():
+        # get label with max votes
+        node_labels = np.argmax(node_hits, axis=1)
+
+        # units with no votes
+        total_hits = np.sum(node_hits, axis=1)
+        node_labels[total_hits == 0] = -1
+        
+        matrix = node_labels.reshape(som_rows, som_cols)
         masked_matrix = np.ma.masked_where(matrix == -1, matrix)
         
         # create figure
@@ -356,15 +355,10 @@ def plot_som_weights(snapshot_som_weights,
         ax.imshow(masked_matrix, cmap=cmap, vmin=0, vmax=9)
         ax.set_title(f"SOM weights, Epoch: {epoch}")
 
-        # create patches for the legend
-        patches = []
-        for label in unique_labels:
-            if label == -1:
-                # add empty black node
-                patches.append(mpatches.Patch(color='black', label='Empty'))
-            else:
-                color_idx = int(label) % len(color_options)
-                patches.append(mpatches.Patch(color=color_options[color_idx], label=f"Class {label}"))
-        
-        ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.show()
+    # create patches for the legend
+    patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
+    patches.append(mpatches.Patch(color='black', label='Empty'))
+    
+    ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.show()
+
