@@ -151,8 +151,8 @@ def calculate_QE_TE_Purity(model: 'AutoEncoder',
             bmu1_coords = grid_coords[bmu1_idx]
             bmu2_coords = grid_coords[bmu2_idx]
 
-            grid_dists = torch.cdist(bmu1_coords, bmu2_coords)
-            total_te += torch.sum(grid_dists > np.sqrt(2)).item()
+            grid_dists = torch.norm(bmu1_coords - bmu2_coords, p=2, dim=1)
+            total_te += torch.sum(grid_dists > 1.42).item()
 
             # Purity
             true_label.append(labels.cpu())
@@ -320,7 +320,7 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
         patches.append(mpatches.Patch(color='black', label='Empty'))
         
         plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.title(f"SOM weights (UMAP), epoch {epoch}")
+        plt.title(f"SOM UMAP weights with majority class, epoch {epoch}")
         plt.show()
         
 def plot_som_weights(snapshot_som_weights,
@@ -355,7 +355,7 @@ def plot_som_weights(snapshot_som_weights,
         # create figure
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.imshow(masked_matrix, cmap=cmap, vmin=0, vmax=9)
-        ax.set_title(f"SOM weights, Epoch: {epoch}")
+        ax.set_title(f"SOM nodes with majority class, epoch: {epoch}")
 
     # create patches for the legend
     patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
@@ -393,7 +393,7 @@ def plot_som_pie_grid(snapshot_som_weights,
     patches.append(mpatches.Patch(color='black', label='Empty'))
     
     fig.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.suptitle(f"SOM Node Class Distributions ({som_rows}x{som_cols})", fontsize=16)
+    plt.suptitle(f"SOM nodes with class distributions ({som_rows}x{som_cols})", fontsize=16)
     plt.show()
 
 def plot_som_mnist(snapshot_som_weights: np.ndarray, som_rows: int, som_cols: int):
@@ -431,5 +431,5 @@ def plot_som_mnist(snapshot_som_weights: np.ndarray, som_rows: int, som_cols: in
             
             ax.text(center_x, center_y, str(label), color=c, fontdict={'weight': 'bold', 'size': 12})
     
-    plt.title(f"SOM Majority Classes ({som_rows}x{som_cols})")
+    plt.title(f"SOM nodes with majority class ({som_rows}x{som_cols})")
     plt.show()
