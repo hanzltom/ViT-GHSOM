@@ -237,13 +237,16 @@ class SOM:
         contingency_matrix = metrics.cluster.contingency_matrix(true_labels, cluster_labels)
         return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
 
-    def describe_node(self, terms: np.ndarray, node_idx: tuple[int, int], num_words: int):
+    def describe_node(self, data: np.ndarray, label: np.ndarray, terms: np.ndarray, node_idx: tuple[int, int], num_words: int, print_samples: bool = False):
         """
         Method only for ``TEXT`` data.
         Method which describes the node at the given index with words with the highest TF-IDF weight. The words are calculated from the neuron's reference vector.
+        :param data: Given dataset
+        :param label: Array of target labels for given data samples
         :param terms: Words from the TfidfVectorizer. Obtainable by calling get_feature_names_out.
         :param node_idx: Index of the neuron to describe.
         :param num_words: Number of words
+        :param print_samples: Bool if labels of the samples for given node are printed
         """
         weights = self.get_weight_of_node(node_idx)
         top_indices = weights.argsort()[-num_words:][::-1]
@@ -251,6 +254,21 @@ class SOM:
         print(f"Top {num_words} words: ", end="")
         for word in top_words:
             print(f"{word},", end=" ")
+        print()
+
+        if print_samples:
+            correct_sample_idx = []
+            for i, sample in enumerate(data):
+                bmu_idx = self.find_BMU(sample, False)
+    
+                if bmu_idx[0] == node_idx[0] and bmu_idx[1] == node_idx[1]:
+                    correct_sample_idx.append(i)
+    
+            print(f"Samples:", end=" ")
+            for idx in correct_sample_idx:
+                print(f"{label[idx]},", end=" ")
+    
+            print()
 
 
     def train_online(self, data: np.ndarray, y: np.ndarray, num_epochs: int):
