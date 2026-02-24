@@ -391,3 +391,22 @@ class GHSOM:
 
 
 
+    def describe_map(self, terms: np.ndarray, map_id: str, node_idx: tuple[int, int], num_words: int):
+        """
+        Method only for ``TEXT`` data.
+        Method which describes the node at the given index at the map with the given id with words that have the highest TF-IDF weight. The words are calculated from the neuron's reference vector.
+        :param terms: ords from the TfidfVectorizer. Obtainable by calling get_feature_names_out.
+        :param map_id: Id of the map.
+        :param node_idx: Index of the neuron to describe.
+        :param num_words: Number of words
+        """
+
+        gsom = self.gsom_db[map_id]
+        weight = gsom.get_weight_of_node(node_idx)
+
+        top_indices = weight.argsort()[-num_words:][::-1]
+        top_words = [terms[ind] for ind in top_indices]
+        print(f"Top {num_words} words: ", end="")
+        for word in top_words:
+            print(f"{word},", end=" ")
+        print()
