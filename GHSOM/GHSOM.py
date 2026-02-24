@@ -151,7 +151,7 @@ class GHSOM:
             self.gsom_id_to_data_idx[map_id] = current_data_idx
 
             # check current gsom for vertical growth
-            self.check_and_expand(current_gsom, current_data_idx, map_id, queue)
+            self.check_and_expand(current_gsom, current_data_idx, map_id, queue, data)
 
         print("Training finished!")
         self.calculate_QE_TE_Purity(data, y)
@@ -326,6 +326,10 @@ class GHSOM:
             total_samples_processed += num_samples
 
         for map_id, r, c, global_subset_idx in self.terminal_units:
+            if len(global_subset_idx) == 0:
+                total_neuron_num += 1
+                continue
+            
             weight_of_leaf = self.gsom_db[map_id].get_weight_of_node((r,c))
 
             subset_X = X[global_subset_idx]
