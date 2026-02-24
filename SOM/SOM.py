@@ -237,6 +237,22 @@ class SOM:
         contingency_matrix = metrics.cluster.contingency_matrix(true_labels, cluster_labels)
         return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
 
+    def describe_node(self, terms: np.ndarray, node_idx: tuple[int, int], num_words: int):
+        """
+        Method only for ``TEXT`` data.
+        Method which describes the node at the given index with words with the highest TF-IDF weight. The words are calculated from the neuron's reference vector.
+        :param terms: Words from the TfidfVectorizer. Obtainable by calling get_feature_names_out.
+        :param node_idx: Index of the neuron to describe.
+        :param num_words: Number of words
+        """
+        weights = self.get_weight_of_node(node_idx)
+        top_indices = weights.argsort()[-num_words:][::-1]
+        top_words = [terms[ind] for ind in top_indices]
+        print(f"Top {num_words} words: ", end="")
+        for word in top_words:
+            print(f"{word},", end=" ")
+
+
     def train_online(self, data: np.ndarray, y: np.ndarray, num_epochs: int):
         """
         Method to train the SOM
