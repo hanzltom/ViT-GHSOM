@@ -13,7 +13,8 @@ class SOM:
                  neighbourhood_function: str = 'gaussian',
                  distance_k: int = 2,
                  learning_rate: float = 0.5,
-                 sigma: float | None = None,
+                 sigma_start: float | None = None,
+                 sigma_end: float | None = 0.5,
                  decay_type: str = 'exponential',
                  beta: float = 0.999):
         """
@@ -23,9 +24,10 @@ class SOM:
         :param neighbourhood_function: Selection of neighbourhood function for influencing neighbouring neuron units. Must be o of ``gaussian``, ``rectangular``, ``triangular``, ``cosine``. Defaults to ``gaussian``.
         :param distance_k: k variable from the Minskowski family formula. Must be one of ``1`` for Manhattan distance, ``2`` for Euclidean distance, ``np.inf`` for Chebyshev distance, other ``k`` > 2 for generic distance with that k. Defaults to ``2``.
         :param learning_rate: Learning rate used for learning. Defaults to ``0.5``.
-        :param sigma: Starting sigma used for influencing neighbouring neuron units. If ``None``, the sigma will be calculated as half of the bigger edge of the grid. Defaults to ``None``.
+        :param sigma_start: Starting sigma used for influencing neighbouring neuron units. If ``None``, the sigma will be calculated as half of the bigger edge of the grid. Defaults to ``None``.
+        :param sigma_end: Ending sigma, beta will be calculated to reach this value if ``exponential`` used as a decay function. Defaults to ``0.5``.
         :param decay_type: Selection of the decay function used for decaying sigma and learning rate. Must be one of ``exponential`` or ``power``. Defaults to ``exponential``.
-        :param beta: Beta parameter for the decaying function. For exponential function, the beta must satisfy: 0 < beta < 1, for power function, the beta must satisfy: beta < 0. Defaults to ``0.999``.
+        :param beta: Beta parameter for the decaying function. This value will not be used if ``exponential`` used as a decay function. For power function, the beta must satisfy: beta < 0. Defaults to ``0.999``.
         """
         self.map_rows = number_of_rows
         self.map_cols = number_of_cols
@@ -35,10 +37,11 @@ class SOM:
         self.beta = beta
         self.time = 1
 
-        if sigma is None:
-            self.sigma = max(self.map_rows, self.map_cols) / 2.0
+        if sigma_start is None:
+            self.sigma_start = max(self.map_rows, self.map_cols) / 2.0
         else:
-            self.sigma = sigma
+            self.sigma_start = sigma_start
+        self.sigma_end = sigma_end
 
         if self.distance_k == np.inf:
             self.calculate_distance_func = chebyshev_distance
@@ -66,6 +69,7 @@ class SOM:
         else:
             raise ValueError(f'Unknown neighbourhood function {neighbourhood_function}')
 
+        self.decay_name = decay_type
         if decay_type == 'exponential' and 0 < self.beta < 1:
             self.calculate_decay = decay_exponential
         elif decay_type == 'power' and self.beta < 0:
@@ -166,7 +170,7 @@ class SOM:
         :param bmu_idx: Index of the BMU for given sample
         """
         eta_t = self.calculate_decay(self.learning_rate, self.beta, self.time)
-        sigma_t = self.calculate_decay(self.sigma, self.beta, self.time)
+        sigma_t = self.calculate_decay(self.sigma_start, self.beta, self.time)
 
         # shape (map_width, map_height)
         influence = self.calculate_neighbourhood_influence(bmu_idx, sigma_t)
@@ -240,6 +244,9 @@ class SOM:
         :param y: Target labels
         :param num_epochs: Number of epoch iterations for training
         """
+        # calculate beta if exponential decay function is used
+        if self.decay_name == "exponential":
+            self.beta = (self.sigma_end / self.sigma_start) ** (1 / num_epochs)
 
         # convert categorical data to numerical
         unique_labels, y_int = np.unique(y, return_inverse=True)
@@ -262,7 +269,7 @@ class SOM:
 
             if epoch % 10 == 0:
                 print(
-                    f"Epoch {epoch}/{num_epochs} complete. Sigma: {self.calculate_decay(self.sigma, self.beta, self.time):.4f}, Lr: {self.calculate_decay(self.learning_rate, self.beta, self.time):.4f}, QE: {self.calculate_QE(data):.4F}, TE: {self.calculate_TE(data):.4f}, Purity: {self.calculate_purity(data, y_int):.4f}")
+                    f"Epoch {epoch}/{num_epochs} complete. Sigma: {self.calculate_decay(self.sigma_start, self.beta, self.time):.4f}, Lr: {self.calculate_decay(self.learning_rate, self.beta, self.time):.4f}, QE: {self.calculate_QE(data):.4F}, TE: {self.calculate_TE(data):.4f}, Purity: {self.calculate_purity(data, y_int):.4f}")
 
             # save weights for visualizations
             if epoch == 0 or (epoch + 1) % 50 == 0:
