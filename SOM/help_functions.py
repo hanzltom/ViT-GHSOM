@@ -200,12 +200,13 @@ def generate_label_matrix_db(weights_db: dict[int: np.ndarray],
     return label_matrix_db
 
 
-def visualize_label_matrix(som: "SOM", y: np.ndarray, epoch_num: int):
+def visualize_label_matrix(som: "SOM", y: np.ndarray, epoch_num: int, name : str = None):
     """
     Function to visualize label matrix
     :param som: SOM class
     :param y: Target labels
     :param epoch_num: Epoch for which we want the label matrix
+    :param name: Name of the dataset for title
     """
 
     map = som.label_matrix_db[epoch_num]
@@ -214,13 +215,27 @@ def visualize_label_matrix(som: "SOM", y: np.ndarray, epoch_num: int):
     # define colors
     color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
                      'tab:olive', 'tab:cyan']
+
+    if len(y_unique) > len(color_options):
+        raise ValueError("Too many target variables, not enough color choices")
     cmap = colors.ListedColormap(color_options[:len(y_unique)])
     cmap.set_bad(color='lightgrey')
 
     # create figure
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(map, cmap=cmap)
-    ax.set_title(f"Epoch: {epoch_num}")
+    if name:
+        ax.set_title(f"Label Matrix, Epoch: {epoch_num}, {name} dataset")
+    else:
+        ax.set_title(f"Label Matrix, Epoch: {epoch_num}")
+
+    rows, cols = map.shape
+    ax.set_xticks(np.arange(cols))
+    ax.set_yticks(np.arange(rows))
+
+    ax.set_xticks(np.arange(-0.5, cols, 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, rows, 1), minor=True)
+    ax.grid(which='minor', color='black', linestyle='-', linewidth=1)
 
     # create patches for the legend
     patches = [mpatches.Patch(color=color_options[i], label=label) for i, label in enumerate(y_unique)]
@@ -241,12 +256,21 @@ def generate_label_matrix_vid(som: "SOM", y: np.ndarray):
     y_unique = np.unique(y)
 
     fig, ax = plt.subplots(figsize=(8, 8))
-    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple']
+    color_options = ['tab:green', 'tab:red', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown', 'tab:pink',
+                     'tab:olive', 'tab:cyan']
     num_repeats = math.ceil(len(y_unique) / len(color_options))
     extended_colors = (color_options * num_repeats)[:len(y_unique)]
     cmap = colors.ListedColormap(extended_colors)
 
     im = ax.imshow(db[1], cmap=cmap)
+
+    rows, cols = som.map_rows, som.map_cols
+    ax.set_xticks(np.arange(cols))
+    ax.set_yticks(np.arange(rows))
+
+    ax.set_xticks(np.arange(-0.5, cols, 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, rows, 1), minor=True)
+    ax.grid(which='minor', color='black', linestyle='-', linewidth=1)
 
     patches = [mpatches.Patch(color=color_options[i], label=label) for i, label in enumerate(y_unique)]
     patches.append(mpatches.Patch(color='tab:grey', label='Empty'))
@@ -314,19 +338,29 @@ def generate_u_matrix_db(weights_db: dict[int: np.ndarray]) -> dict[int: np.ndar
     return u_matrix_db
 
 
-def visualize_u_matrix(som: "SOM", epoch_num: int):
+def visualize_u_matrix(som: "SOM", epoch_num: int, name : str = None):
     """
     Function to visualize U-Matrix
     :param som: SOM class
     :param epoch_num: Epoch for which we want the U-Matrix
+    :param name: Name of the dataset for title
     """
     matrix = som.u_matrix_db[epoch_num]
     ig, ax = plt.subplots(figsize=(8, 8))
 
     im = ax.imshow(matrix, cmap='plasma')
-    ax.set_title(f"U-Matrix (Epoch: {epoch_num})")
+
+    if name:
+        ax.set_title(f"U-Matrix, Epoch: {epoch_num}, {name} dataset")
+    else:
+        ax.set_title(f"U-Matrix, Epoch: {epoch_num}")
+
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label('Average Distance to Neighbours')
+
+    rows, cols = matrix.shape
+    ax.set_xticks(np.arange(cols))
+    ax.set_yticks(np.arange(rows))
 
     plt.tight_layout()
     plt.show()
@@ -433,11 +467,12 @@ def generate_u_matrix_extended_db(weights_db: dict[int: np.ndarray]) -> dict[int
 
     return u_matrix_extended_db
 
-def visualize_u_matrix_extended(som: "SOM", epoch_num: int):
+def visualize_u_matrix_extended(som: "SOM", epoch_num: int, name : str = None):
     """
     Function to visualize U-Matrix
     :param som: SOM class
     :param epoch_num: Epoch for which we want the U-Matrix
+    :param name: Name of the dataset for title
     """
     matrix = som.u_matrix_extended_db[epoch_num]
     fig, ax = plt.subplots(figsize=(10, 10))
@@ -445,6 +480,10 @@ def visualize_u_matrix_extended(som: "SOM", epoch_num: int):
     im = ax.imshow(matrix, cmap='plasma')
 
     m, n = matrix.shape
+    ax.set_xticks(np.arange(0, n, 2))
+    ax.set_yticks(np.arange(0, m, 2))
+    ax.set_xticklabels(np.arange(len(np.arange(0, n, 2))))
+    ax.set_yticklabels(np.arange(len(np.arange(0, m, 2))))
 
     neuron_x_coords = []
     neuron_y_coords = []
@@ -456,7 +495,11 @@ def visualize_u_matrix_extended(som: "SOM", epoch_num: int):
 
     ax.scatter(neuron_x_coords, neuron_y_coords, s=30, c='yellow', edgecolors='black', label='Neuron Position')
 
-    ax.set_title(f"U-Matrix Extended (Epoch: {epoch_num})")
+    if name:
+        ax.set_title(f"U-Matrix Extended, Epoch: {epoch_num}, {name} dataset")
+    else:
+        ax.set_title(f"U-Matrix Extended, Epoch: {epoch_num}")
+
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label('Distance')
     ax.legend(loc='upper left', bbox_to_anchor=(1.1, 1.0))
