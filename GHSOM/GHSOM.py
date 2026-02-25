@@ -155,7 +155,6 @@ class GHSOM:
 
         print("Training finished!")
         self.calculate_QE_TE_Purity(data, y)
-        print(f"QE: {self.QE}, TE: {self.TE}, Purity: {self.purity}")
 
     def map_index_to_units(self,
                           gsom_instance: GSOM,
