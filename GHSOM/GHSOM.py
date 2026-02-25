@@ -238,7 +238,7 @@ class GHSOM:
 
                 # empty units
                 if local_subset_idx is None or len(local_subset_idx) == 0:
-                    self.terminal_units.append((parent_id, r, c, np.array([])))
+                    self.terminal_units.append((parent_id, r, c, np.array([], dtype=int)))
                     continue
 
                 global_subset_idx = parent_data_idx[local_subset_idx]
@@ -354,16 +354,22 @@ class GHSOM:
 
         print(f"GHSOM results: Number of neurons: {total_neuron_num}, QE: {self.QE}, TE: {self.TE}, Purity: {self.purity}")
 
-
-
-    def describe_map(self, terms: np.ndarray, map_id: str, node_idx: tuple[int, int], num_words: int):
+    def describe_node(self, data: np.ndarray,
+                      label: np.ndarray,
+                      terms: np.ndarray, map_id: str,
+                      node_idx: tuple[int, int],
+                      num_words: int,
+                      print_samples: bool = False):
         """
         Method only for ``TEXT`` data.
-        Method which describes the node at the given index at the map with the given id with words that have the highest TF-IDF weight. The words are calculated from the neuron's reference vector.
-        :param terms: ords from the TfidfVectorizer. Obtainable by calling get_feature_names_out.
-        :param map_id: Id of the map.
+        Method which describes the node at the given index with words with the highest TF-IDF weight. The words are calculated from the neuron's reference vector.
+        :param data: Given dataset
+        :param label: Array of target labels for given data samples
+        :param terms: Words from the TfidfVectorizer. Obtainable by calling get_feature_names_out.
+        :param map_id Id of the GSOM instance.
         :param node_idx: Index of the neuron to describe.
         :param num_words: Number of words
+        :param print_samples: Bool if labels of the samples for given node are printed
         """
 
         gsom = self.gsom_db[map_id]
@@ -371,7 +377,28 @@ class GHSOM:
 
         top_indices = weight.argsort()[-num_words:][::-1]
         top_words = [terms[ind] for ind in top_indices]
+        print(f"\nMap: {map_id} | Node: {node_idx}")
         print(f"Top {num_words} words: ", end="")
         for word in top_words:
             print(f"{word},", end=" ")
         print()
+
+        if print_samples:
+            global_map_idx = self.gsom_id_to_data_idx.get(map_id)
+
+            if global_map_idx is None or len(global_map_idx) == 0:
+                print("Samples mapped to this node: 0")
+                return
+
+            map_data = data[global_map_idx]
+            idx_mapping = self.map_index_to_units(gsom, map_data)
+            local_node_idx = idx_mapping.get(node_idx)
+
+            if local_node_idx is None or len(local_node_idx) == 0:
+                print("Samples mapped to this node: 0")
+            else:
+                global_node_idx = global_map_idx[local_node_idx]
+
+                print(f"Samples:", end=" ")
+                for idx in global_node_idx:
+                    print(f"{label[idx]},", end=" ")
