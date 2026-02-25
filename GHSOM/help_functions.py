@@ -232,7 +232,8 @@ def draw_recursive(ax: plt.axes,
                    height: float,
                    label_map: dict[str: str],
                    color_map:  dict[str, str],
-                   depth: int):
+                   depth: int,
+                   colorful : bool):
     """
     Recursive function to plot each individual GSOM label matrix
     :param ax: Matplotlib Axes
@@ -245,6 +246,7 @@ def draw_recursive(ax: plt.axes,
     :param label_map: Mapping of labels on each GSOM units
     :param color_map: Color encoding for each target label
     :param depth: Current depth of recursion
+    :param colorful: Whether to plot all GSOM instances colored by color. Default is ``True``
     """
     current_gsom = ghsom.gsom_db[map_id]
 
@@ -265,14 +267,13 @@ def draw_recursive(ax: plt.axes,
 
             # Recursion, check for children GSOM
             if unit_id in ghsom.gsom_db:
-                draw_recursive(ax, ghsom, unit_id, unit_x, unit_y, unit_w, unit_h, label_map, color_map, depth + 1)
+                draw_recursive(ax, ghsom, unit_id, unit_x, unit_y, unit_w, unit_h, label_map, color_map, depth + 1, colorful)
             else:
                 # Leaf node - add Patch
                 label = label_map.get(unit_id, "Empty")
                 color = color_map[label]
 
-                rect = mpatches.Rectangle((unit_x, unit_y), unit_w, unit_h,
-                                          facecolor=color, edgecolor='white', linewidth=0.5, zorder=0)
+                rect = mpatches.Rectangle((unit_x, unit_y), unit_w, unit_h, facecolor=color if colorful else 'white', edgecolor='white' if colorful else 'black', linewidth=0.5, zorder=0)
                 ax.add_patch(rect)
 
     # Draws edges
@@ -281,14 +282,16 @@ def draw_recursive(ax: plt.axes,
     ax.add_patch(outline)
 
 
-def plot_ghsom(ghsom_instance: "GHSOM", X: np.ndarray, y: np.ndarray):
+def plot_ghsom(ghsom_instance: "GHSOM", X: np.ndarray, y: np.ndarray, colorful : bool = True):
     """
     Function which plots GHSOM with all GSOM instances and their label matrices
     :param ghsom_instance: GHSOM instance
     :param X: Dataset
     :param y: Target labels
+    :param colorful: Whether to plot all GSOM instances colored by color. Default is ``True``.
     """
-
+    if not colorful:
+        y = np.zeros(len(X))
     hierarchy_label_map = ghsom_instance.get_labels(X, y)
 
     label_names, y_int = np.unique(y, return_inverse=True)
@@ -305,13 +308,14 @@ def plot_ghsom(ghsom_instance: "GHSOM", X: np.ndarray, y: np.ndarray):
     max_depth = max([key.count('_') for key in ghsom_instance.gsom_db.keys()]) + 1
 
     draw_recursive(ax, ghsom_instance, "1", canvas_x, canvas_y, canvas_w, canvas_h, hierarchy_label_map, label_to_color,
-                   depth=0)
+                   depth=0, colorful=colorful)
 
     ax.axis('off')
     ax.set_title(f"GHSOM Structure (Max Depth: {max_depth})")
-    patches = [mpatches.Patch(color=label_to_color[l], label=l) for l in unique_labels]
-    patches.append(mpatches.Patch(color=label_to_color["Empty"], label='Empty'))
-    ax.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
+    if colorful:
+        patches = [mpatches.Patch(color=label_to_color[l], label=l) for l in unique_labels]
+        patches.append(mpatches.Patch(color=label_to_color["Empty"], label='Empty'))
+        ax.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
     plt.show()
 
 
