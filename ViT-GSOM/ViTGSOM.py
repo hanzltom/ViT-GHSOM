@@ -5,17 +5,18 @@ import numpy as np
 
 from help_functions import cosine_distance_torch, gaussian_neighbourhood_torch
 
-
 """
 https://tintn.github.io/Implementing-Vision-Transformer-from-Scratch/
 https://www.geeksforgeeks.org/deep-learning/how-to-use-pytorchs-nnmultiheadattention/
 https://www.geeksforgeeks.org/deep-learning/implementing-an-autoencoder-in-pytorch/
 """
 
+
 class SomLoss(nn.Module):
     """
     Class to calculate SOM loss for weights update
     """
+
     def __init__(self):
         """
         Constructor for SomLoss class
@@ -58,18 +59,20 @@ class SomLoss(nn.Module):
         neighbourhood_influence = gaussian_neighbourhood_torch(dist_grid, sigma)
 
         loss = neighbourhood_influence * dists
-        return loss.sum(dim=1).mean() # Equation 3
+        return loss.sum(dim=1).mean()  # Equation 3
 
-class ViTLoss(nn.Module):
+
+class ViTLossReconstruction(nn.Module):
     """
-    Class to calculate ViT loss for weights update
+    Class to calculate ViT reconstruction loss for weights update
     """
+
     def __init__(self):
         """
         Constructor for ViTLoss class
         """
         super().__init__()
-        
+
         self.mseLoss = nn.MSELoss()
 
     def forward(self, original_img: torch.Tensor, reconstructed: torch.Tensor) -> torch.Tensor:
@@ -84,6 +87,30 @@ class ViTLoss(nn.Module):
         return l_nn
 
 
+class ViTLossClassification(nn.Module):
+    """
+    Class to calculate ViT classification loss for weights update
+    """
+
+    def __init__(self):
+        """
+        Constructor for ViTLoss class
+        """
+        super().__init__()
+
+        self.crossEntropy = nn.CrossEntropyLoss()
+
+    def forward(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass to compute ViT loss using Cross Entropy Loss
+        :param logits: Predicted labels
+        :param labels: True labels
+        :return: Scalar loss tensor
+        """
+        l_nn = self.crossEntropy(logits, labels)
+        return l_nn
+
+
 def unpatch(x: torch.Tensor, patch_size: int = 4, channels: int = 1) -> torch.Tensor:
     """
     Function which transforms the patches from the decoder back to its original input size
@@ -91,11 +118,12 @@ def unpatch(x: torch.Tensor, patch_size: int = 4, channels: int = 1) -> torch.Te
     :param patch_size: Size of the patch. Defaults to ``4``
     :param channels: Number of input channels. Defaults to ``1``
     :return: Sequence of picture in original input size
-    """    # E.g. (8, 49, 3*4*4): batch of 8, 7x7 grid, num_of_channels * patch_size * patch_size
+    """  # E.g. (8, 49, 3*4*4): batch of 8, 7x7 grid, num_of_channels * patch_size * patch_size
     B, num_patches, pixels_per_patch = x.shape
 
     if pixels_per_patch != channels * patch_size * patch_size:
-        raise ValueError(f'Number of pixels in patch {pixels_per_patch} must be equal to channels * patch_size * patch_size: {channels * patch_size * patch_size}')
+        raise ValueError(
+            f'Number of pixels in patch {pixels_per_patch} must be equal to channels * patch_size * patch_size: {channels * patch_size * patch_size}')
 
     # get size of the grid
     # sqrt(49) = 7 -> 7x7 grid of patches
@@ -118,10 +146,12 @@ def unpatch(x: torch.Tensor, patch_size: int = 4, channels: int = 1) -> torch.Te
 
     return x
 
+
 class PatchEmbedding(nn.Module):
     """
     Class to split images into patches and embed them using convolutional layers
     """
+
     def __init__(self,
                  img_size: int = 28,
                  patch_size: int = 4,
@@ -163,6 +193,7 @@ class MLP(nn.Module):
     """
     Multi-Layer Perceptron class
     """
+
     def __init__(self, embed_dim: int, mlp_dim: int, dropout: float):
         """
         Constructor for MLP
@@ -188,10 +219,12 @@ class MLP(nn.Module):
         x = self.dropout(x)
         return x
 
+
 class Block(nn.Module):
     """
     Transformer Encoder Block consisting of Self-Attention and MLP
     """
+
     def __init__(self,
                  embed_dim: int,
                  num_heads: int,
@@ -225,6 +258,7 @@ class Block(nn.Module):
         # Skip connection
         x = x + mlp_output
         return x
+
 
 class ViTEncoder(nn.Module):
     """
@@ -293,7 +327,6 @@ class ViTEncoder(nn.Module):
         return x
 
 
-
 class ViTDecoder(nn.Module):
     """
     Vision Transformer Decoder.
@@ -357,10 +390,12 @@ class ViTDecoder(nn.Module):
         x = self.head(x)
         return x
 
+
 class AutoEncoder(nn.Module):
     """
     Vision Autoencoder with an integrated Self-Organizing Map layer
     """
+
     def __init__(self,
                  img_size: int = 28,
                  patch_size: int = 4,
@@ -371,7 +406,9 @@ class AutoEncoder(nn.Module):
                  num_heads: int = 2,
                  mlp_dim: int = 64,
                  som_rows: int = 5,
-                 som_cols: int = 5):
+                 som_cols: int = 5,
+                 classification: bool = False,
+                 num_classes: int | None = None):
         """
         Constructor for AutoEncoder
         :param img_size: Size of input image. Defaults to ``28``
@@ -384,6 +421,8 @@ class AutoEncoder(nn.Module):
         :param mlp_dim: The dimension of the hidden layer. Defaults to ``64``
         :param som_rows: Number of rows in the SOM grid
         :param som_cols: Number of columns in the SOM grid
+        :param classification: Whether to autoencoder is used for classification task. Defaults to ``False``
+        :param num_classes: Number of classes. For clustering task, set as ``None``. Defaults to ``None``
         """
         super().__init__()
 
@@ -398,7 +437,8 @@ class AutoEncoder(nn.Module):
         # Encoder: Image -> Latent
         self.encoder = ViTEncoder(img_size, patch_size, num_of_channels, embed_dim, enc_depth, num_heads, mlp_dim)
         # Decoder: Latent -> Reconstructed patches
-        self.decoder = ViTDecoder(self.num_of_patches, patch_size, num_of_channels, embed_dim, dec_depth, num_heads, mlp_dim)
+        self.decoder = ViTDecoder(self.num_of_patches, patch_size, num_of_channels, embed_dim, dec_depth, num_heads,
+                                  mlp_dim)
 
         self.current_row_num = som_rows
         self.current_col_num = som_cols
@@ -407,25 +447,37 @@ class AutoEncoder(nn.Module):
         self.som_dim = self.num_of_patches * embed_dim
         self.som_weights = nn.Parameter(torch.randn(self.current_row_num * self.current_col_num, self.som_dim))
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        self.classification = classification
+        if classification:
+            if num_classes is None:
+                raise ValueError(f"num_classes must be specified if classification is True")
+            self.self.cls_head = nn.Linear(embed_dim, num_classes)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | bool]:
         """
         Forward pass for AutoEncoder
         :param x: Input images of shape ``(batch_size, in_channels, img_size, img_size)``
         :return: Tuple containing:
                  - output: Reconstructed images of shape ``(batch_size, num_channels, img_size, img_size)``
                  - latent: Latent representations of shape ``(batch_size, num_patches + 1, embed_dim)``
+                 - logits: Label predictions of shape ``(batch_size)`` if used for classification task, otherwise ``None``
         """
         latent = self.encoder(x)
         patched_output = self.decoder(latent)
         output = unpatch(patched_output, self.patch_size, self.num_of_channels)
-        return output, latent
+
+        if self.classification:
+            cls_token = latent[:, 0, :]
+            logits = self.cls_head(cls_token)
+            return output, latent, logits
+        return output, latent, None
 
     def get_sigma(self) -> float:
         """
         Calculates the initial sigma for the SOM as half of the image size
         :return: Sigma value
         """
-        return np.ceil(min(self.current_row_num, self.current_col_num) / 2)
+        return  np.ceil(min(self.current_row_num, self.current_col_num) / 2)
 
     def get_som_shape(self) -> tuple[int, int]:
         """
@@ -450,8 +502,8 @@ class AutoEncoder(nn.Module):
         return self.som_weights[flat_idx]
 
     def find_dissimilar_neighbour(self,
-                                  e_index: tuple[int,int],
-                                  e_index_flat: int) -> tuple[int,int]:
+                                  e_index: tuple[int, int],
+                                  e_index_flat: int) -> tuple[int, int]:
         """
         Method to find the most dissimilar neighbour in a rectangular grid to the neuron unit e at given index
         :param e_index: Index on the 2d grid of the neuron unit e
@@ -489,8 +541,8 @@ class AutoEncoder(nn.Module):
         insert_idx = max(col1, col2)
 
         # calculate the weights of new column as a mean of neighbours
-        col_left = grid_weights[:, col1:col1+1, :]
-        col_right = grid_weights[:, col2:col2+1, :]
+        col_left = grid_weights[:, col1:col1 + 1, :]
+        col_right = grid_weights[:, col2:col2 + 1, :]
         new_col = (col_left + col_right) / 2
 
         part_left = grid_weights[:, :insert_idx, :]
@@ -512,8 +564,8 @@ class AutoEncoder(nn.Module):
         insert_idx = max(row1, row2)
 
         # calculate the weights of new row as a mean of neighbours
-        row_top = grid_weights[row1:row1+1, :, :]
-        row_bottom = grid_weights[row2:row2+1, :, :]
+        row_top = grid_weights[row1:row1 + 1, :, :]
+        row_bottom = grid_weights[row2:row2 + 1, :, :]
         new_row = (row_top + row_bottom) / 2
 
         part_top = grid_weights[:insert_idx, :, :]
@@ -585,7 +637,7 @@ class AutoEncoder(nn.Module):
                 col_indices = flat_indices % self.current_col_num
 
                 # if multiple images in same batch hit same neuron, value is added only ones, therefore have to use np.add.at
-                #unit_errors[row_indices, col_indices] += min_dists
+                # unit_errors[row_indices, col_indices] += min_dists
                 np.add.at(unit_errors, (row_indices, col_indices), min_dists)
 
         return unit_errors
