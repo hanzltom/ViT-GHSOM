@@ -22,18 +22,23 @@ class SomLoss(nn.Module):
         super().__init__()
 
     def forward(self,
-                input_vectors: torch.Tensor,
+                latent_vectors: torch.Tensor,
                 som_weights: torch.Tensor,
                 grid_coords: torch.Tensor,
                 sigma: float) -> torch.Tensor:
         """
         Forward pass to compute SOM loss
-        :param input_vectors: Input batch tensor of shape ``(batch_size, n_features)``
+        :param latent_vectors: Latent batch tensor of shape ``(batch_size, n_features)``
         :param som_weights: SOM weight tensor of shape ``(n_nodes, n_features)``
         :param grid_coords: Grid coordinate tensor of shape ``(n_nodes, 2)``
         :param sigma: The current neighborhood radius
         :return: Scalar loss tensor
         """
+        patches = latent_vectors[:, 1:, :] 
+        
+        # reshape patches to match SOM weights dim
+        input_vectors = patches.reshape(patches.shape[0], -1)
+        
         # distance for all samples in batch, shape (batch, Num_Units)
         dists = cosine_distance_torch(som_weights, input_vectors)
 
@@ -54,9 +59,9 @@ class SomLoss(nn.Module):
         loss = neighbourhood_influence * dists
         return loss.sum(dim=1).mean() # Equation 3
 
-class ViTSOMLoss(nn.Module):
+class ViTLoss(nn.Module):
     """
-    Class to calculate total loss for ViT-SOM model
+    Class to calculate total loss OF THE vIt
     """
     def __init__(self):
         """
@@ -65,37 +70,20 @@ class ViTSOMLoss(nn.Module):
         super().__init__()
         
         self.mseLoss = nn.MSELoss()
-        self.somLoss = SomLoss()
 
     def forward(self,
                 original_img: torch.Tensor,
                 reconstructed: torch.Tensor,
-                latent_vectors: torch.Tensor,
-                som_weights: torch.Tensor,
-                grid_coords: torch.Tensor,
-                sigma: float,
-                current_lamda: float) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                ) -> torch.Tensor:
         """
         Forward pass to calculate the combined reconstruction and topological loss.
         :param original_img: The real input image of shape ``(batch_size, channels, height, width)``
         :param reconstructed: The reconstructed image by the decoder of shape ``(batch_size, channels, height, width)``
-        :param latent_vectors: Patch embeddings from the encoder of shape ``(batch_size, seq_len + 1, embed_dim)``
-        :param som_weights: SOM reference vectors of shape ``(n_nodes, n_features)``
-        :param grid_coords: Grid coordinate tensor of shape ``(n_nodes, 2)``
-        :param sigma: The current neighborhood radius
-        :param current_lamda: The current weight coefficient
-        :return: A tuple containing total loss, ViT loss and SOM loss
+        :return: ViT loss 
         """
         l_nn = self.mseLoss(original_img, reconstructed)
 
-        # latent vector shape: (batch, sequence of patches + cls, embed_dim), cls not needed for SOM, only patches
-        patches = latent_vectors[:, 1:, :] 
-        
-        # reshape patches to match SOM weights dim
-        som_input = patches.reshape(patches.shape[0], -1)
-        l_som = self.somLoss(som_input, som_weights, grid_coords, sigma)
-        l_total = (current_lamda * l_som) + l_nn
-        return l_total, l_nn, l_som
+        return l_nn
 
 
 def unpatch(x: torch.Tensor, patch_size: int = 4, channels: int = 1) -> torch.Tensor:
