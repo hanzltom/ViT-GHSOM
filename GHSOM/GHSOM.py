@@ -53,6 +53,8 @@ class GHSOM:
         self.layer0_weight = None # mean of data
         self.global_stopping_criterion = 0 # vertical growth
         self.gsom_db = {}
+        self.gsom_id_to_data_idx = {}
+        self.terminal_units = []
 
         if distance_k == np.inf:
             self.calculate_distance_func = chebyshev_distance
@@ -134,53 +136,33 @@ class GHSOM:
             initial_weights=None
         )
 
-        # Deque for gsom, subdata and map_id
+        # Deque for gsom, subdata_idx and map_id
         queue = deque()
-        queue.append((root_gsom, data, "1"))
+        queue.append((root_gsom, np.arange(len(data)), "1"))
 
         # BFS for expanding child maps
         while queue:
             # get current gsom with its mapped data samples
-            current_gsom, current_data, map_id = queue.popleft()
+            current_gsom, current_data_idx, map_id = queue.popleft()
+
             # train current gsom
-            current_gsom.train_and_grow(current_data)
+            current_gsom.train_and_grow(data[current_data_idx])
             self.gsom_db[map_id] = current_gsom
+            self.gsom_id_to_data_idx[map_id] = current_data_idx
+
             # check current gsom for vertical growth
-            self.check_and_expand(current_gsom, current_data, map_id, queue)
+            self.check_and_expand(current_gsom, current_data_idx, map_id, queue, data)
 
         print("Training finished!")
         self.calculate_QE_TE_Purity(data, y)
-        print(f"QE: {self.QE}, TE: {self.TE}, Purity: {self.purity}")
 
-    def map_data_to_units(self,
+    def map_index_to_units(self,
                           gsom_instance: GSOM,
                           data: np.ndarray) -> dict[tuple[int, int]: list[np.ndarray]]:
         """
-        Method to find all data samples represented by each neuron unit on the grid
+        Method to find all data samples indices represented by each neuron unit on the grid
         :param gsom_instance: Current GSOM instance
         :param data: Current data
-        :return: Mapping
-        """
-        mapping = {}
-
-        for sample in data:
-            bmu_idx = gsom_instance.find_BMU(sample)
-
-            if bmu_idx not in mapping.keys():
-                mapping[bmu_idx] = []
-            mapping[bmu_idx].append(sample)
-
-        return mapping
-
-    def map_data_with_labels_to_units(self, gsom_instance: GSOM,
-                                      data: np.ndarray,
-                                      y: np.ndarray
-                                      ) -> dict[tuple[int, int]: list[list[np.ndarray], list[np.ndarray]]]:
-        """
-        Method to find all data samples with its target label represented by each neuron unit on the grid
-        :param gsom_instance: Current GSOM instance
-        :param data: Current data
-        :param y: Target label of current data
         :return: Mapping
         """
         mapping = {}
@@ -189,9 +171,12 @@ class GHSOM:
             bmu_idx = gsom_instance.find_BMU(sample)
 
             if bmu_idx not in mapping.keys():
-                mapping[bmu_idx] = [[],[]]
-            mapping[bmu_idx][0].append(sample)
-            mapping[bmu_idx][1].append(y[i])
+                mapping[bmu_idx] = []
+            mapping[bmu_idx].append(i)
+
+        # convert list to numpy array
+        for key in mapping.keys():
+            mapping[key] = np.array(mapping[key])
 
         return mapping
 
@@ -225,42 +210,50 @@ class GHSOM:
 
     def check_and_expand(self,
                          parent_gsom: GSOM,
-                         parent_data: np.ndarray,
+                         parent_data_idx: np.ndarray,
                          parent_id: str,
-                         queue: deque):
+                         queue: deque,
+                         global_data: np.ndarray):
         """
         Method which checks if the parent GSOM is eligible for vertical expansion. It checks every neuron unit if it satisfies the global (vertical) stopping condition and if so, creates a new GSOM child.
         :param parent_gsom: GSOM instance being expanded
-        :param parent_data: Current data mapped to parent GSOM
+        :param parent_data_idx: Current data mapped to parent GSOM
         :param parent_id: ID of the parent GSOM
         :param queue: Deque to add the new child GSOM to BFS deque for further growth
+        :param global_data: Whole dataset
         """
+        parent_data = global_data[parent_data_idx]
+
         # calculate errors for each neuron unit
         unit_errors, _ = parent_gsom.calculate_unit_errors(parent_data)
         # map data to its representative neuron units
-        data_mapping = self.map_data_to_units(parent_gsom, parent_data)
+        idx_mapping = self.map_index_to_units(parent_gsom, parent_data)
 
         for r in range(parent_gsom.current_row_num):
             for c in range(parent_gsom.current_col_num):
 
                 unit_error_sum = unit_errors[r][c]
+                local_subset_idx = idx_mapping.get((r, c))
+
+                # empty units
+                if local_subset_idx is None or len(local_subset_idx) == 0:
+                    self.terminal_units.append((parent_id, r, c, np.array([], dtype=int)))
+                    continue
+
+                global_subset_idx = parent_data_idx[local_subset_idx]
 
                 # if qe not used for vertical, divide it by number of samples represented by the neuron unit
                 if not self.use_qe_for_vertical:
-                    samples_on_unit = len(data_mapping.get((r,c), []))
-                    if samples_on_unit > 0:
-                        unit_error_sum /= samples_on_unit
+                    unit_error_sum /= len(local_subset_idx)
 
                 # Vertical growth condition
                 if unit_error_sum > self.global_stopping_criterion:
-                    subset_data = data_mapping.get((r, c))
-
                     # Check if number of samples mapped to this neuron satisfies the minimum number of samples for vertical growth
-                    if self.min_samples_vertical_grow is None or (subset_data is not None and len(subset_data) > self.min_samples_vertical_grow):
+                    if self.min_samples_vertical_grow is None or len(global_subset_idx) > self.min_samples_vertical_grow:
 
                         child_id = f"{parent_id}_{r}-{c}"
                         print(
-                            f"   -> Spawning child {child_id} Num of samples: {len(subset_data)}, Error: {unit_error_sum:.2f} > {self.global_stopping_criterion:.2f})")
+                            f"   -> Spawning child {child_id} Num of samples: {len(local_subset_idx)}, Error: {unit_error_sum:.2f} > {self.global_stopping_criterion:.2f})")
 
                         child_init_weights = self.calculate_child_init_weights(parent_gsom, r, c)
 
@@ -278,7 +271,12 @@ class GHSOM:
                             initial_weights=child_init_weights
                         )
 
-                        queue.append((child_gsom, subset_data, child_id))
+                        queue.append((child_gsom, global_subset_idx, child_id))
+                    else:
+                        self.terminal_units.append((parent_id, r, c, global_subset_idx))
+
+                else:
+                    self.terminal_units.append((parent_id, r, c, global_subset_idx))
 
     def get_labels(self, X: np.ndarray, y: np.ndarray) -> dict[str: str]:
         """
@@ -289,38 +287,19 @@ class GHSOM:
         """
         label_names, y_int = np.unique(y, return_inverse=True)
 
-        # BFS (current_gsom, current_data_index, map_id)
-        queue = deque([(self.gsom_db["1"], X, y_int, "1")])
-
         hierarchy_labels = {}
 
-        # BFS
-        while queue:
-            curr_gsom, curr_X, curr_y, curr_map_id = queue.popleft()
+        for map_id, r, c, global_subset_idx in self.terminal_units:
+            node_id = f"{map_id}_{r}-{c}"
 
-            if len(curr_X) == 0: continue # empty neuron
+            if len(global_subset_idx) == 0:
+                hierarchy_labels[node_id] = "Empty"
+                continue
 
-            # Map data to units in current map
-            mapping = self.map_data_with_labels_to_units(curr_gsom, curr_X, curr_y)
-
-            for r in range(curr_gsom.current_row_num):
-                for c in range(curr_gsom.current_col_num):
-                    unit_id = f"{curr_map_id}_{r}-{c}"
-
-                    unit_data = mapping.get((r, c))
-
-                    if unit_data is None:
-                        hierarchy_labels[unit_id] = "Empty"
-                        continue
-
-                    subset_X, subset_y = unit_data
-                    counts = np.bincount(subset_y) # get number of occurences for each class
-                    majority_class_idx = np.argmax(counts)
-                    hierarchy_labels[unit_id] = label_names[majority_class_idx]
-
-                    # check for child gsom and if so add to bfs
-                    if unit_id in self.gsom_db.keys():
-                        queue.append((self.gsom_db[unit_id], subset_X, subset_y, unit_id))
+            subset_y = y_int[global_subset_idx]
+            counts = np.bincount(subset_y)  # get number of occurences for each class
+            majority_class_idx = np.argmax(counts)
+            hierarchy_labels[node_id] = label_names[majority_class_idx]
 
         return hierarchy_labels
 
@@ -332,8 +311,6 @@ class GHSOM:
         """
         label_names, y_int = np.unique(y, return_inverse=True)
 
-        queue = deque([(self.gsom_db["1"], X, y_int, "1")])
-
         total_global_qe = 0.0
         total_weighted_te = 0.0
         total_samples_processed = 0
@@ -341,46 +318,33 @@ class GHSOM:
         cluster_labels = []
         total_neuron_num = 0
 
-        # BFS
-        while queue:
-            curr_gsom, curr_X, curr_y, curr_map_id = queue.popleft()
+        for gsom_id, data_subset_idx in self.gsom_id_to_data_idx.items():
+            map_te = self.gsom_db[gsom_id].calculate_TE(X[data_subset_idx])
+            num_samples = len(data_subset_idx)
+            total_weighted_te += map_te * num_samples
+            total_samples_processed += num_samples
 
-            if len(curr_X) == 0:
+        for map_id, r, c, global_subset_idx in self.terminal_units:
+            if len(global_subset_idx) == 0:
+                total_neuron_num += 1
                 continue
-            elif len(curr_X) > 2:
-                # TE is calculated as weighted mean through all GSOM instances, not just the leaf units as other metrics
-                map_te = curr_gsom.calculate_TE(curr_X)
-                num_samples = curr_X.shape[0]
-                total_weighted_te += map_te * num_samples
-                total_samples_processed += num_samples
+            
+            weight_of_leaf = self.gsom_db[map_id].get_weight_of_node((r,c))
 
-            mapping = self.map_data_with_labels_to_units(curr_gsom, curr_X, curr_y)
-            for r in range(curr_gsom.current_row_num):
-                for c in range(curr_gsom.current_col_num):
-                    unit_id = f"{curr_map_id}_{r}-{c}"
+            subset_X = X[global_subset_idx]
+            subset_y = y_int[global_subset_idx]
 
-                    unit_data = mapping.get((r, c))
+            # QE
+            # broadcasting weight x array of samples
+            dists = self.calculate_distance_func(weight_of_leaf, subset_X, 1)
+            total_global_qe += np.sum(dists)
 
-                    if unit_data is None or len(unit_data[0]) == 0:
-                        continue
+            # Purity
+            true_labels.extend(subset_y)
+            # add cluter label for every sample in this leaf node
+            cluster_labels.extend([f"{map_id}_{r}-{c}"] * len(subset_y))
 
-                    subset_X, subset_y = unit_data
-                    subset_X = np.array(subset_X)
-
-                    if unit_id in self.gsom_db.keys():
-                        queue.append((self.gsom_db[unit_id], subset_X, subset_y, unit_id))
-                    else:
-                        weight_of_leaf = curr_gsom.get_weight_of_node((r,c))
-
-                        # broadcasting weight x array of samples
-                        dists = self.calculate_distance_func(weight_of_leaf, subset_X, 1)
-                        total_global_qe += np.sum(dists)
-
-                        true_labels.extend(subset_y)
-                        # add cluter label for every sample in this leaf node
-                        cluster_labels.extend([unit_id] * len(subset_y))
-
-                        total_neuron_num += 1
+            total_neuron_num += 1
 
         self.QE = total_global_qe / X.shape[0] if X.shape[0] > 0 else 0
         self.TE = total_weighted_te / total_samples_processed if total_samples_processed > 0 else 0
@@ -389,16 +353,22 @@ class GHSOM:
 
         print(f"GHSOM results: Number of neurons: {total_neuron_num}, QE: {self.QE}, TE: {self.TE}, Purity: {self.purity}")
 
-
-
-    def describe_map(self, terms: np.ndarray, map_id: str, node_idx: tuple[int, int], num_words: int):
+    def describe_node(self, data: np.ndarray,
+                      label: np.ndarray,
+                      terms: np.ndarray, map_id: str,
+                      node_idx: tuple[int, int],
+                      num_words: int,
+                      print_samples: bool = False):
         """
         Method only for ``TEXT`` data.
-        Method which describes the node at the given index at the map with the given id with words that have the highest TF-IDF weight. The words are calculated from the neuron's reference vector.
-        :param terms: ords from the TfidfVectorizer. Obtainable by calling get_feature_names_out.
-        :param map_id: Id of the map.
+        Method which describes the node at the given index with words with the highest TF-IDF weight. The words are calculated from the neuron's reference vector.
+        :param data: Given dataset
+        :param label: Array of target labels for given data samples
+        :param terms: Words from the TfidfVectorizer. Obtainable by calling get_feature_names_out.
+        :param map_id Id of the GSOM instance.
         :param node_idx: Index of the neuron to describe.
         :param num_words: Number of words
+        :param print_samples: Bool if labels of the samples for given node are printed
         """
 
         gsom = self.gsom_db[map_id]
@@ -406,7 +376,28 @@ class GHSOM:
 
         top_indices = weight.argsort()[-num_words:][::-1]
         top_words = [terms[ind] for ind in top_indices]
+        print(f"\nMap: {map_id} | Node: {node_idx}")
         print(f"Top {num_words} words: ", end="")
         for word in top_words:
             print(f"{word},", end=" ")
         print()
+
+        if print_samples:
+            global_map_idx = self.gsom_id_to_data_idx.get(map_id)
+
+            if global_map_idx is None or len(global_map_idx) == 0:
+                print("Samples mapped to this node: 0")
+                return
+
+            map_data = data[global_map_idx]
+            idx_mapping = self.map_index_to_units(gsom, map_data)
+            local_node_idx = idx_mapping.get(node_idx)
+
+            if local_node_idx is None or len(local_node_idx) == 0:
+                print("Samples mapped to this node: 0")
+            else:
+                global_node_idx = global_map_idx[local_node_idx]
+
+                print(f"Samples:", end=" ")
+                for idx in global_node_idx:
+                    print(f"{label[idx]},", end=" ")

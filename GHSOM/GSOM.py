@@ -277,7 +277,7 @@ class GSOM:
 
             self.grow(unit_error_matrix)
             self.reset_time()
-            print(f"Novy shape {self.current_row_num}, {self.current_col_num}")
+            #print(f"Novy shape {self.current_row_num}, {self.current_col_num}")
 
             # Condition to prevent infinite growth
             if self.max_gsom_size is not None:
