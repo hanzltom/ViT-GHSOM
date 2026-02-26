@@ -425,14 +425,14 @@ class AutoEncoder(nn.Module):
         Calculates the initial sigma for the SOM as half of the image size
         :return: Sigma value
         """
-        return np.ceil(min(self.som_rows, self.som_cols) / 2)
+        return np.ceil(min(self.current_row_num, self.current_col_num) / 2)
 
     def get_som_shape(self) -> tuple[int, int]:
         """
         Returns the shape of the SOM grid
         :return: A tuple (rows, cols)
         """
-        return self.som_rows, self.som_cols
+        return self.current_row_num, self.current_col_num
 
     def get_som_weights(self) -> torch.Tensor:
         """
