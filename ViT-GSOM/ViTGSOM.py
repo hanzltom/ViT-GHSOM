@@ -451,7 +451,7 @@ class AutoEncoder(nn.Module):
         if classification:
             if num_classes is None:
                 raise ValueError(f"num_classes must be specified if classification is True")
-            self.self.cls_head = nn.Linear(embed_dim, num_classes)
+            self.cls_head = nn.Linear(embed_dim, num_classes)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | bool]:
         """

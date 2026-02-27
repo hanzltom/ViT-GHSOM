@@ -125,7 +125,7 @@ def calculate_QE_TE_Purity(model: 'AutoEncoder',
             images = images.to(device)
             labels = labels.to(device)
 
-            _, latent = model(images)
+            _, latent, _ = model(images)
 
             # extract cls token with sequence of patches - not needed
             # shape (batch, embed_dim)
@@ -191,7 +191,7 @@ def get_node_hits(model: 'AutoEncoder',
         images = images.to(device)
         labels = labels.cpu().numpy()
 
-        _, latent = model(images)
+        _, latent, _ = model(images)
         patches = latent[:, 1:, :]
         som_input = patches.reshape(patches.shape[0], -1)
 
@@ -244,7 +244,7 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
         patches.append(mpatches.Patch(color='black', label='Empty'))
         
         plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.title(f"SOM UMAP weights with majority class, epoch {epoch}")
+        plt.title(f"SOM UMAP weights with majority class, epoch {epoch + 1}")
         plt.show()
         
 def plot_som_weights(snapshot_som_weights,
