@@ -127,7 +127,7 @@ def calculate_QE_TE_Purity(model: 'AutoEncoder',
             images = images.to(device)
             labels = labels.to(device)
 
-            _, latent, _ = model(images)
+            _, latent = model(images)
 
             # extract cls token with sequence of patches - not needed
             # shape (batch, embed_dim)
