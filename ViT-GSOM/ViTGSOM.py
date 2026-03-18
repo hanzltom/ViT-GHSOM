@@ -472,6 +472,13 @@ class AutoEncoder(nn.Module):
             return output, latent, logits
         return output, latent, None
 
+    def get_num_of_neurons(self) -> int:
+        """
+        Returns the current number of neurons
+        :return Number of neurons
+        """
+        return self.som_weights.size()[0]
+    
     def get_sigma(self) -> float:
         """
         Calculates the initial sigma for the SOM as half of the image size
