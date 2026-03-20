@@ -16,7 +16,7 @@ class GHSOM:
                  learning_rate: float = 0.5,
                  beta: float = 0.999,
                  use_qe_for_vertical: bool = True,
-                 min_samples_vertical_grow: int | None = 3,
+                 min_samples_vertical_grow: int | None = 5,
                  max_gsom_size: int | None = 30,
                  distance_k: int = 2,
                  neighbourhood_function: str = 'gaussian',
