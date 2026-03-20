@@ -244,7 +244,7 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
         patches.append(mpatches.Patch(color='black', label='Empty'))
         
         plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.title(f"SOM UMAP weights with majority class, epoch {epoch + 1}")
+        plt.title(f"SOM UMAP weights with majority class, epoch {epoch}")
         plt.show()
         
 def plot_som_weights(snapshot_som_weights,
