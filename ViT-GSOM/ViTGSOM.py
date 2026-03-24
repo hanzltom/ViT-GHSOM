@@ -87,30 +87,6 @@ class ViTLossReconstruction(nn.Module):
         return l_nn
 
 
-class ViTLossClassification(nn.Module):
-    """
-    Class to calculate ViT classification loss for weights update
-    """
-
-    def __init__(self):
-        """
-        Constructor for ViTLoss class
-        """
-        super().__init__()
-
-        self.crossEntropy = nn.CrossEntropyLoss()
-
-    def forward(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass to compute ViT loss using Cross Entropy Loss
-        :param logits: Predicted labels
-        :param labels: True labels
-        :return: Scalar loss tensor
-        """
-        l_nn = self.crossEntropy(logits, labels)
-        return l_nn
-
-
 def unpatch(x: torch.Tensor, patch_size: int = 4, channels: int = 1) -> torch.Tensor:
     """
     Function which transforms the patches from the decoder back to its original input size
@@ -406,9 +382,7 @@ class AutoEncoder(nn.Module):
                  num_heads: int = 2,
                  mlp_dim: int = 64,
                  som_rows: int = 5,
-                 som_cols: int = 5,
-                 classification: bool = False,
-                 num_classes: int | None = None):
+                 som_cols: int = 5):
         """
         Constructor for AutoEncoder
         :param img_size: Size of input image. Defaults to ``28``
@@ -421,8 +395,6 @@ class AutoEncoder(nn.Module):
         :param mlp_dim: The dimension of the hidden layer. Defaults to ``64``
         :param som_rows: Number of rows in the SOM grid
         :param som_cols: Number of columns in the SOM grid
-        :param classification: Whether to autoencoder is used for classification task. Defaults to ``False``
-        :param num_classes: Number of classes. For clustering task, set as ``None``. Defaults to ``None``
         """
         super().__init__()
 
@@ -447,13 +419,8 @@ class AutoEncoder(nn.Module):
         self.som_dim = self.num_of_patches * embed_dim
         self.som_weights = nn.Parameter(torch.randn(self.current_row_num * self.current_col_num, self.som_dim))
 
-        self.classification = classification
-        if classification:
-            if num_classes is None:
-                raise ValueError(f"num_classes must be specified if classification is True")
-            self.cls_head = nn.Linear(embed_dim, num_classes)
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | bool]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | bool]:
         """
         Forward pass for AutoEncoder
         :param x: Input images of shape ``(batch_size, in_channels, img_size, img_size)``
@@ -466,11 +433,7 @@ class AutoEncoder(nn.Module):
         patched_output = self.decoder(latent)
         output = unpatch(patched_output, self.patch_size, self.num_of_channels)
 
-        if self.classification:
-            cls_token = latent[:, 0, :]
-            logits = self.cls_head(cls_token)
-            return output, latent, logits
-        return output, latent, None
+        return output, latent
 
     def get_num_of_neurons(self) -> int:
         """

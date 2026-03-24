@@ -88,8 +88,7 @@ def get_grid_coords(row_num: int, col_num: int, device: torch.device | str) -> t
     :param device: The torch device
     :return: Grid coordinates of shape ``(row_num * col_num, 2)``.
     """
-    y_coords, x_coords = torch.meshgrid(
-torch.arange(row_num, dtype=torch.float32),
+    y_coords, x_coords = torch.meshgrid( torch.arange(row_num, dtype=torch.float32),
         torch.arange(col_num, dtype=torch.float32),
         indexing='ij'
     )
@@ -125,7 +124,7 @@ def calculate_QE_TE_Purity(model: 'AutoEncoder',
             images = images.to(device)
             labels = labels.to(device)
 
-            _, latent, _ = model(images)
+            _, latent = model(images)
 
             # extract cls token with sequence of patches - not needed
             # shape (batch, embed_dim)
@@ -191,7 +190,7 @@ def get_node_hits(model: 'AutoEncoder',
         images = images.to(device)
         labels = labels.cpu().numpy()
 
-        _, latent, _ = model(images)
+        _, latent = model(images)
         patches = latent[:, 1:, :]
         som_input = patches.reshape(patches.shape[0], -1)
 
@@ -229,16 +228,15 @@ def plot_umap_som_weights(snapshot_som_weights, unique_labels: set):
         active_mask = node_labels != -1
 
         plt.figure(figsize=(10, 8))
+        # print empty nodes as black
+        if np.sum(~active_mask) > 0:
+            plt.scatter(embedding[~active_mask, 0], embedding[~active_mask, 1], c='black')
+
         # plot active nodes
         if np.sum(active_mask) > 0:
             scatter = plt.scatter(embedding[active_mask, 0], embedding[active_mask, 1],
                                   c=node_labels[active_mask], cmap=cmap)
 
-        # print empty nodes as black
-        if np.sum(~active_mask) > 0:
-            plt.scatter(embedding[~active_mask, 0], embedding[~active_mask, 1], c='black')
-
-        
         # create patches for the legend
         patches = [mpatches.Patch(color=color_options[i], label=f"Class {i}") for i in range(len(unique_labels))]
         patches.append(mpatches.Patch(color='black', label='Empty'))
