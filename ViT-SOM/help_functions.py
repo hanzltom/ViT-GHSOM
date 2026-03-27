@@ -372,3 +372,96 @@ def plot_som_mnist(snapshot_som_weights: np.ndarray, som_rows: int, som_cols: in
     
     plt.title(f"SOM nodes with majority class ({som_rows}x{som_cols})")
     plt.show()
+
+import matplotlib.pyplot as plt
+
+def generate_extended_u_matrix(weight_matrix: np.ndarray, rows, cols) -> np.ndarray:
+    """
+    Function to generate Extended U-Matrix
+    :param weight_matrix: Weights matrix from the model
+    :return: Extended U-Matrix
+    """
+    weight_matrix = weight_matrix.reshape((rows, cols, -1))
+    m, n, dim = weight_matrix.shape
+
+    # Size of extended U-Matrix (2m-1)*(2n-1)
+    ext_m = 2 * m - 1
+    ext_n = 2 * n - 1
+    u_matrix_extended = np.zeros((ext_m, ext_n))
+
+    # Horizontal distances
+    for r in range(m):
+        for c in range(n - 1):
+            current_node = weight_matrix[r, c]
+            right_neighbour = weight_matrix[r, c + 1]
+
+            dist = np.linalg.norm(current_node - right_neighbour)
+            u_matrix_extended[2 * r, 2 * c + 1] = dist
+
+    # Vertical distances
+    for r in range(m - 1):
+        for c in range(n):
+            current_node = weight_matrix[r, c]
+            bottom_neighbour = weight_matrix[r + 1, c]
+
+            dist = np.linalg.norm(current_node - bottom_neighbour)
+            u_matrix_extended[2 * r + 1, 2 * c] = dist
+
+    # Centers among distances - odd rows, odd columns - average over neighbours
+    for r in range(1, ext_m, 2):
+        for c in range(1, ext_n, 2):
+            neighbours = [u_matrix_extended[r - 1, c], u_matrix_extended[r + 1, c], u_matrix_extended[r, c - 1],
+                         u_matrix_extended[r, c + 1]]
+            u_matrix_extended[r, c] = np.mean(neighbours)
+
+    # Neuron positions - average over neighbours
+    for r in range(0, ext_m, 2):
+        for c in range(0, ext_n, 2):
+            distances = []
+            if r > 0: distances.append(u_matrix_extended[r - 1, c]) #top
+            if r < ext_m - 1: distances.append(u_matrix_extended[r + 1, c]) #bottom
+            if c > 0: distances.append(u_matrix_extended[r, c - 1]) #left
+            if c < ext_n - 1: distances.append(u_matrix_extended[r, c + 1]) #right
+
+            u_matrix_extended[r,c] = np.mean(distances)
+
+    return u_matrix_extended
+
+def visualize_u_matrix_extended(matrix: np.ndarray, epoch_num: int, name : str = None):
+    """
+    Function to visualize U-Matrix
+    :param matrix: Numpy Extended U-Matrix matrix
+    :param epoch_num: Epoch for which we want the U-Matrix
+    :param name: Name of the dataset for title
+    """
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    im = ax.imshow(matrix, cmap='plasma')
+
+    m, n = matrix.shape
+    ax.set_xticks(np.arange(0, n, 2))
+    ax.set_yticks(np.arange(0, m, 2))
+    ax.set_xticklabels(np.arange(len(np.arange(0, n, 2))))
+    ax.set_yticklabels(np.arange(len(np.arange(0, m, 2))))
+
+    neuron_x_coords = []
+    neuron_y_coords = []
+
+    for r in range(0, m, 2):
+        for c in range(0, n, 2):
+            neuron_y_coords.append(r)
+            neuron_x_coords.append(c)
+
+    ax.scatter(neuron_x_coords, neuron_y_coords, s=30, c='yellow', edgecolors='black', label='Neuron Position')
+
+    if name:
+        ax.set_title(f"U-Matrix Extended, Epoch: {epoch_num}, {name} dataset")
+    else:
+        ax.set_title(f"U-Matrix Extended, Epoch: {epoch_num}")
+
+    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label('Distance')
+    ax.legend(loc='upper left', bbox_to_anchor=(1.1, 1.0))
+
+    plt.tight_layout()
+    plt.show()
