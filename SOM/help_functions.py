@@ -225,9 +225,9 @@ def visualize_label_matrix(som: "SOM", y: np.ndarray, epoch_num: int, name : str
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(map, cmap=cmap)
     if name:
-        ax.set_title(f"Label Matrix, Epoch: {epoch_num}, {name} dataset")
+        ax.set_title(f"SOM grid with majority class, Epoch: {epoch_num}, {name} dataset")
     else:
-        ax.set_title(f"Label Matrix, Epoch: {epoch_num}")
+        ax.set_title(f"SOM grid with majority class, Epoch: {epoch_num}")
 
     rows, cols = map.shape
     ax.set_xticks(np.arange(cols))
