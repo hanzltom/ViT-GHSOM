@@ -622,6 +622,5 @@ class AutoEncoder(nn.Module):
         unit_errors = self.calculate_unit_errors(loader, device)
 
         self.grow(unit_errors)
-        print(f"Current grid size: ({self.current_row_num}, {self.current_col_num})")
         self.to(device)
         self.train()
