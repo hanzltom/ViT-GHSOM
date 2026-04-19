@@ -91,11 +91,7 @@ def get_grid_coords(row_num: int, col_num: int, device: torch.device | str) -> t
     :param device: The torch device
     :return: Grid coordinates of shape ``(row_num * col_num, 2)``.
     """
-    y_coords, x_coords = torch.meshgrid(
-torch.arange(row_num, dtype=torch.float32),
-        torch.arange(col_num, dtype=torch.float32),
-        indexing='ij'
-    )
+    y_coords, x_coords = torch.meshgrid(torch.arange(row_num, dtype=torch.float32), torch.arange(col_num, dtype=torch.float32), indexing='ij')
 
     # coords are 2 dim tensors, we stack them over new dimension to shape (row_num, col_num, 2)
     # reshape them to shape (num_units, 2)

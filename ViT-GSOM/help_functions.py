@@ -101,16 +101,20 @@ def get_grid_coords(row_num: int, col_num: int, device: torch.device | str) -> t
 
 def calculate_QE_TE_Purity(model: 'AutoEncoder',
                            loader: torch.utils.data.DataLoader,
-                           device: torch.device) -> dict[str: float]:
+                           device: torch.device,
+                           purity_only: bool = False) -> dict[str: float]:
     """
     Function calculating QE, TE and Purity metrics for model evaluation
     :param model: Trained ViT-SOM Autoencoder
     :param loader: Dataloader
     :param device: The torch device
+    :param purity_only: if only Purity metric is computed, default ``False``
     :return: A tuple containing (QE, TE, Purity)
     """
     # https://stackoverflow.com/questions/34047540/python-clustering-purity-metric
     model.eval()
+    output = {}
+    
     true_label = []
     cluster_labels = []
     total_qe = 0.0
@@ -157,7 +161,6 @@ def calculate_QE_TE_Purity(model: 'AutoEncoder',
 
             total_samples += dists.shape[0]
 
-    output = {}
     output["QE"] = total_qe / total_samples if total_samples > 0 else 0
     output["TE"] = total_te / total_samples if total_samples > 0 else 0
 

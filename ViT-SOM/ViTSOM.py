@@ -377,8 +377,8 @@ class AutoEncoder(nn.Module):
                  som_cols: int = 5):
         """
         Constructor for AutoEncoder
-        :param img_size: Size of input image. Defaults to ``28``
-        :param patch_size: Size of individual patch. Defaults to ``4``
+        :param img_size: Pixel size of one side of the input image. Only square images are allowed. Defaults to ``28``
+        :param patch_size: Pixel size of one side of the patch. Defaults to ``4``
         :param num_of_channels: Number of input channels. Defaults to ``1``
         :param embed_dim: The embedding dimension. Defaults to ``16``
         :param enc_depth: The number of transformer encoder blocks. Defaults to ``4``
