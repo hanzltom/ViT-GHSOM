@@ -1,3 +1,8 @@
+# Filename: help_functions.py
+# Author: Tomas Hanzlik <hanzlto3@fit.cvut.cz>
+# Created: 2026-04-22
+# Description: Help functions for the training and visualizations of the ViT-SOM model
+
 import math
 
 import numpy

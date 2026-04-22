@@ -1,3 +1,8 @@
+# Filename: ViTGSOM.py
+# Author: Tomas Hanzlik <hanzlto3@fit.cvut.cz>
+# Created: 2026-04-22
+# Description: Class for the ViT-GSOM model
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

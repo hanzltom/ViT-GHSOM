@@ -1,3 +1,8 @@
+# Filename: GHSOM.py
+# Author: Tomas Hanzlik <hanzlto3@fit.cvut.cz>
+# Created: 2026-04-22
+# Description: Class for the GHSOM model
+
 import numpy as np
 from sklearn import metrics
 from help_functions import *

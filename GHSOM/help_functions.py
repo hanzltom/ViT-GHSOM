@@ -1,3 +1,8 @@
+# Filename: help_functions.py
+# Author: Tomas Hanzlik <hanzlto3@fit.cvut.cz>
+# Created: 2026-04-22
+# Description: Help functions for the training and visualizations of the GHSOM model
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches

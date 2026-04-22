@@ -1,3 +1,9 @@
+# Filename: SOM.py
+# Author: Tomas Hanzlik <hanzlto3@fit.cvut.cz>
+# Created: 2026-04-22
+# Description: Class for the standard SOM algorithm
+
+
 from help_functions import *
 from sklearn import metrics
 

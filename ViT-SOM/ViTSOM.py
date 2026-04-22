@@ -1,3 +1,8 @@
+# Filename: ViTSOM.py
+# Author: Tomas Hanzlik <hanzlto3@fit.cvut.cz>
+# Created: 2026-04-22
+# Description: Class for the ViT-SOM model
+
 import torch
 import torch.nn as nn
 import numpy as np
