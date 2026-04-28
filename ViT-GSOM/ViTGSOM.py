@@ -35,7 +35,7 @@ class SomLoss(nn.Module):
                 sigma: float) -> torch.Tensor:
         """
         Forward pass to compute SOM loss
-        :param latent_vectors: Patch embeddings from the encoder of shape ``(batch_size, seq_len + 1, embed_dim)``
+        :param latent_vectors: Patch embeddings from the encoder of shape ``(batch_size, num_patches + 1, embed_dim)``
         :param som_weights: SOM weight tensor of shape ``(n_nodes, n_features)``
         :param grid_coords: Grid coordinate tensor of shape ``(n_nodes, 2)``
         :param sigma: The current neighborhood radius
@@ -64,7 +64,7 @@ class SomLoss(nn.Module):
         neighbourhood_influence = gaussian_neighbourhood_torch(dist_grid, sigma)
 
         loss = neighbourhood_influence * dists
-        return loss.sum(dim=1).mean()  # Equation 3
+        return loss.sum(dim=1).mean()
 
 
 class ViTLossReconstruction(nn.Module):
