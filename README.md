@@ -48,6 +48,29 @@ ViT-GSOM_thesis/
 └── requirements.txt                                # Python dependencies
 ```
 
+---
+
+## Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/hanzltom/ViT-GSOM_thesis.git
+   cd ViT-GSOM_thesis
+    ```
+   
+2. **Create and activate a virtual environment:**
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+   
+3. **Install dependencies:**
+    ```bash
+   pip install -r requirements.txt
+    ```
+
+---
+
 ## Additional information
 
 - **Author**: Tomáš Hanzlík
