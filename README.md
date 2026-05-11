@@ -1,9 +1,13 @@
-# Thesis's attachments README
+# Self-Organizing Maps and Their Modern Extensions thesis
 
-This repository contains all the necessary attachments associated with the thesis. It includes the source code for all implementations of the models,
-experiments in ipynb files, assignment, declaration and the thesis document itself.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
 
-Structure:
+This repository contains all the necessary attachments associated with the thesis ```Self-Organizing Maps and Their Modern Extensions```. It includes the source code for all implementations of the models,
+experiments in jupyter notebooks, assignment, declaration, and the thesis document itself.
+
+## Structure:
 
 ```text
 ViT-GSOM_thesis/
@@ -49,7 +53,7 @@ ViT-GSOM_thesis/
 - **Author**: Tomáš Hanzlík
 - **Username**: hanzlto3
 - **E-mail**: hanzlto3@fit.cvut.cz
-- **Date**: 6.05.2026
+- **Date**: 11.05.2026
 
 
 
